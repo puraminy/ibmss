@@ -3,7 +3,7 @@ import requests
 import sys, os, getopt
 import json
 
-def request(query, page = 0,  filters = None, sections = None):
+def request(query, page = 0, merge=True,  filters = None, sections = None):
     headers = {
         'Connection': 'keep-alive',
         'Accept': 'application/json',
@@ -16,9 +16,9 @@ def request(query, page = 0,  filters = None, sections = None):
         'Referer': 'https://dimsum.eu-gb.containers.appdomain.cloud/',
         'Accept-Language': 'en-US,en;q=0.9',
     }
-    page =1
     filters_str = json.dumps(filters)
-    data = f'{{"query":"{query}","filters":{filters_str},"page":{page},"size":10,"sort":null,"sessionInfo":""}}'
+    size = 20
+    data = f'{{"query":"{query}","filters":{filters_str},"page":{page},"size":{20},"sort":null,"sessionInfo":""}}'
     print("data:", data)
     response = requests.post('https://dimsum.eu-gb.containers.appdomain.cloud/api/scholar/search', headers=headers, data=data)
 
@@ -29,16 +29,21 @@ def request(query, page = 0,  filters = None, sections = None):
     folder = query + '_' + str(year) + '_' + str(page)
     folder = folder.replace(' ','_')
     folder = folder.replace('__','_')
-    if not os.path.exists(folder):
+    if not merge and not os.path.exists(folder):
         os.makedirs(folder)
 
     articles = response.json()['searchResults']['results']
+    if merge:
+        f = open(folder + '.html', "w")
+        print("<!DOCTYPE html>\n<html>\n<body>", file=f)
+
     for a in articles: 
         paper_title = a['title']
         file_name = paper_title.replace(' ','_').lower()
         print("getting ... ", a['title'])
-        f = open(folder + '/' + file_name + '.html', "w")
-        print("<!DOCTYPE html>\n<html>\n<body>", file=f)
+        if not merge:
+           f = open(folder + '/' + file_name + '.html', "w")
+           print("<!DOCTYPE html>\n<html>\n<body>", file=f)
         print("<h1>" +  "New Paper" + "</h1>", file=f)
         print("<h1>" +  paper_title + "</h1>", file=f)
         for b in a['sections']:
@@ -53,8 +58,11 @@ def request(query, page = 0,  filters = None, sections = None):
                     text= c['text']
                     f.write("<p>" + text + "</p>")
 
-            print("<h1> Paper was:" +  paper_title + "</h1>", file=f)
+            print("<p> Paper was:" +  paper_title + "</p>", file=f)
         print("</body>\n</html>", file=f)
+    if not merge:
+       f.close()
+    if merge:
         f.close()
 
 def usage():
@@ -62,12 +70,12 @@ def usage():
 
 def main(argv):
    query = ''
-   merge_all = False
+   merge = 'true'
    year = '0000'
    page = 0
    sects = 'all'
    try:
-       opts, args = getopt.getopt(argv,"hq:p:y:s:",["query=","page=","year=","sects="])
+       opts, args = getopt.getopt(argv,"hq:p:y:s:m:",["query=","page=","year=","sects=","merge="])
    except getopt.GetoptError:
       usage() 
       sys.exit(2)
@@ -81,12 +89,15 @@ def main(argv):
          page = arg
       elif opt in ("-y", "--year"):
          year = arg
+      elif opt in ("-m", "--merge"):
+         sects = arg
       elif opt in ("-s", "--sects"):
          sects = arg
    print("query:", query)
    print("page:", page)
    print("year:", year)
    print("sects:", sects)
+   print("merge:", merge)
    if not query:
      print('query is mandatory')
      sys.exit(2)
@@ -97,7 +108,7 @@ def main(argv):
    sect_list = []
    if sects != "all":
       sect_list = sects.split()
-   request(query, page, filters, sect_list)
+   request(query, page, merge =='true', filters, sect_list)
 
 if __name__ == "__main__":
    main(sys.argv[1:])
