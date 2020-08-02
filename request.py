@@ -38,7 +38,7 @@ def request(query, page = 0,  filters = None, sections = None):
         file_name = paper_title.replace(' ','_').lower()
         print("getting ... ", a['title'])
         f = open(folder + '/' + file_name + '.html', "w")
-        print("<html><body>", file=f)
+        print("<!DOCTYPE html>\n<html>\n<body>", file=f)
         print("<h1>" +  "New Paper" + "</h1>", file=f)
         print("<h1>" +  paper_title + "</h1>", file=f)
         for b in a['sections']:
@@ -48,13 +48,13 @@ def request(query, page = 0,  filters = None, sections = None):
                 continue
             print("<h2>", file=f)
             print(title, file=f)
-            print("<h2>", file=f)
+            print("</h2>", file=f)
             for c in b['fragments']:
                     text= c['text']
                     f.write("<p>" + text + "</p>")
 
             print("<h1> Paper was:" +  paper_title + "</h1>", file=f)
-        print("</body></html>", file=f)
+        print("</body>\n</html>", file=f)
         f.close()
 
 def usage():
@@ -63,9 +63,9 @@ def usage():
 def main(argv):
    query = ''
    merge_all = False
-   sections = 'all' 
    year = '0000'
    page = 0
+   sects = 'all'
    try:
        opts, args = getopt.getopt(argv,"hq:p:y:s:",["query=","page=","year=","sects="])
    except getopt.GetoptError:
@@ -94,9 +94,10 @@ def main(argv):
    filters = {}
    if year != "0000":
       filters["year"] =  year
-
-   sections = sects.split()
-   request(query, page, filters, sections)
+   sect_list = []
+   if sects != "all":
+      sect_list = sects.split()
+   request(query, page, filters, sect_list)
 
 if __name__ == "__main__":
    main(sys.argv[1:])
