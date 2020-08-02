@@ -3,7 +3,7 @@ import requests
 import sys, os, getopt
 import json
 
-def request(query, page = 0, filters = None):
+def request(query, page = 0,  filters = None, sections = None):
     headers = {
         'Connection': 'keep-alive',
         'Accept': 'application/json',
@@ -36,16 +36,23 @@ def request(query, page = 0, filters = None):
     for a in articles: 
         paper_title = a['title']
         print("getting ... ", a['title'])
-        f = open(folder + '/' + a['title'] + '.vvc', "w")
-        print(paper_title, file=f)
+        f = open(folder + '/' + a['title'] + '.html', "w")
+        print("<html><body>")
+        print("<h1>" +  "New Paper" + "</h1>", file=f)
+        print("<h1>" +  paper_title + "</h1>", file=f)
         for b in a['sections']:
             title =  b['title']
-            print("", file=f)
+            if sections and title.lower() not in sections:
+                print("ignoring " + title + " ")
+                continue
+            print("<h2>", file=f)
             print(title, file=f)
-            print("", file=f)
+            print("<h2>", file=f)
             for c in b['fragments']:
                     text= c['text']
-                    f.write(text)
+                    f.write("<p>" + text + "</p>")
+
+            print("<h1> Paper was:" +  paper_title + "</h1>", file=f)
         f.close()
 
 def usage():
@@ -58,7 +65,7 @@ def main(argv):
    year = '0000'
    page = 0
    try:
-      opts, args = getopt.getopt(argv,"hq:p:y:",["query=","page=","year="])
+       opts, args = getopt.getopt(argv,"hq:p:y:s:",["query=","page=","year=","sects="])
    except getopt.GetoptError:
       usage() 
       sys.exit(2)
@@ -72,9 +79,12 @@ def main(argv):
          page = arg
       elif opt in ("-y", "--year"):
          year = arg
+      elif opt in ("-s", "--sects"):
+         sects = arg
    print("query:", query)
    print("page:", page)
    print("year:", year)
+   print("sects:", sects)
    if not query:
      print('query is mandatory')
      sys.exit(2)
@@ -83,7 +93,8 @@ def main(argv):
    if year != "0000":
       filters["year"] =  year
 
-   request(query, page, filters)
+   sections = sects.split()
+   request(query, page, filters, sections)
 
 if __name__ == "__main__":
    main(sys.argv[1:])
