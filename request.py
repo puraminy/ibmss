@@ -35,9 +35,10 @@ def request(query, page = 0,  filters = None, sections = None):
     articles = response.json()['searchResults']['results']
     for a in articles: 
         paper_title = a['title']
+        file_name = paper_title.replace(' ','_').lower()
         print("getting ... ", a['title'])
-        f = open(folder + '/' + a['title'] + '.html', "w")
-        print("<html><body>")
+        f = open(folder + '/' + file_name + '.html', "w")
+        print("<html><body>", file=f)
         print("<h1>" +  "New Paper" + "</h1>", file=f)
         print("<h1>" +  paper_title + "</h1>", file=f)
         for b in a['sections']:
@@ -53,6 +54,7 @@ def request(query, page = 0,  filters = None, sections = None):
                     f.write("<p>" + text + "</p>")
 
             print("<h1> Paper was:" +  paper_title + "</h1>", file=f)
+        print("</body></html>", file=f)
         f.close()
 
 def usage():
