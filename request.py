@@ -1,4 +1,4 @@
-#change
+#v2 tehran
 import requests
 import sys, os, getopt
 import json
@@ -16,17 +16,19 @@ def request(query, page = 0, filters = None):
         'Referer': 'https://dimsum.eu-gb.containers.appdomain.cloud/',
         'Accept-Language': 'en-US,en;q=0.9',
     }
-    data = f'{{"query":"{query}","filters":{{"year":2020}},"page":{page},"size":10,"sort":null,"sessionInfo":""}}'
-    source = "ACL"
     page =1
-    data = '{"query":"reading comprehension","filters":{},"page":0,"size":10,"sort":null,"sessionInfo":""}'
-    #data = f'{{"query":"{query}","filters":{{"year":"{year}"}},"page":{page},"size":10,"sort":null,"sessionInfo":""}}'
-    filters = {'year':"2020"}
     filters_str = json.dumps(filters)
-    #data = f'{{"query":"{query}","filters":{{{filters_str} }},"page":{page},"size":10,"sort":null,"sessionInfo":""}}'
+    data = f'{{"query":"{query}","filters":{filters_str},"page":{page},"size":10,"sort":null,"sessionInfo":""}}'
     print("data:", data)
     response = requests.post('https://dimsum.eu-gb.containers.appdomain.cloud/api/scholar/search', headers=headers, data=data)
-    folder = query + ' ' + str(year) + str(page)
+
+    year = ''
+    if "year" in filters:
+        year = filters['year']
+
+    folder = query + '_' + str(year) + '_' + str(page)
+    folder = folder.replace(' ','_')
+    folder = folder.replace('__','_')
     if not os.path.exists(folder):
         os.makedirs(folder)
 
@@ -46,31 +48,42 @@ def request(query, page = 0, filters = None):
                     f.write(text)
         f.close()
 
+def usage():
+   print('request.py -q <query> -p <page> -y year')
 
 def main(argv):
    query = ''
    merge_all = False
    sections = 'all' 
+   year = '0000'
    page = 0
    try:
-      opts, args = getopt.getopt(argv,"hq:p:",["query=","page="])
+      opts, args = getopt.getopt(argv,"hq:p:y:",["query=","page=","year="])
    except getopt.GetoptError:
-      print('request.py -q <query> -p <page>')
+      usage() 
       sys.exit(2)
    for opt, arg in opts:
       if opt == '-h':
-         print('request.py -q <query> -p <page>')
+         usage()
          sys.exit()
       elif opt in ("-q", "--query"):
          query = arg
       elif opt in ("-p", "--page"):
          page = arg
+      elif opt in ("-y", "--year"):
+         year = arg
    print("query:", query)
    print("page:", page)
+   print("year:", year)
    if not query:
      print('query is mandatory')
      sys.exit(2)
-   request(query, page)
+   
+   filters = {}
+   if year != "0000":
+      filters["year"] =  year
+
+   request(query, page, filters)
 
 if __name__ == "__main__":
    main(sys.argv[1:])
