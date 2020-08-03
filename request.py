@@ -73,7 +73,7 @@ def main(argv):
    merge = 'true'
    year = '0000'
    page = 0
-   sects = 'all'
+   sects = 'abstract introduction conclusion'
    try:
        opts, args = getopt.getopt(argv,"hq:p:y:s:m:",["query=","page=","year=","sects=","merge="])
    except getopt.GetoptError:
