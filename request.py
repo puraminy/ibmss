@@ -2,8 +2,15 @@
 import requests
 import sys, os, getopt
 import json
+import getch as gh
+from termcolor import colored
+def switch(l, val):
+    if not val in l:
+       l.append(val)
+    else: 
+       l.remove(val)
 
-def request(query, page = 0, merge=True,  filters = None, sections = None):
+def request(query, page = 0, merge=True, ls=False,  filters = None, sections = None):
     headers = {
         'Connection': 'keep-alive',
         'Accept': 'application/json',
@@ -17,17 +24,26 @@ def request(query, page = 0, merge=True,  filters = None, sections = None):
         'Accept-Language': 'en-US,en;q=0.9',
     }
     filters_str = json.dumps(filters)
-    size = 20
+    size = 15
     data = f'{{"query":"{query}","filters":{filters_str},"page":{page},"size":{20},"sort":null,"sessionInfo":""}}'
     print("data:", data)
     response = requests.post('https://dimsum.eu-gb.containers.appdomain.cloud/api/scholar/search', headers=headers, data=data)
 
+    conference = ''
+    if "conference" in filters:
+        conference = filters['conference']
+    task = ''
+    if "task" in filters:
+        task = filters['task']
+    dataset = ''
+    if "dataset" in filters:
+        dataset = filters['dataset']
     year = ''
     if "year" in filters:
         year = filters['year']
-
-    folder = query + '_' + str(year) + '_' + str(page)
+    folder = query + '_' + str(year) + '_' + str(page) + '_' + conference + '_' + task + '_' + dataset
     folder = folder.replace(' ','_')
+    folder = folder.replace('__','_')
     folder = folder.replace('__','_')
     if not merge and not os.path.exists(folder):
         os.makedirs(folder)
@@ -36,11 +52,38 @@ def request(query, page = 0, merge=True,  filters = None, sections = None):
     if merge:
         f = open(folder + '.html', "w")
         print("<!DOCTYPE html>\n<html>\n<body>", file=f)
+    ch = '0'
+    sels = []
+    full = []
+    if ls:
+        while ch != 'g':
+            for i,a in enumerate(articles): 
+                paper_title = a['title']
+                item = str(i).rjust(2) +  ":" +  paper_title.ljust(40)[:80]               
+                color = 'green'
+                if str(i) in full:
+                    color = 'blue'
+                if str(i) in sels:
+                   print(colored(item, color))
+                else:
+                   print(item)
+            print("sels:", sels)
+            inp = input("select:") #gh.getch()    
+            inp = inp.split(' ')
+            ch = inp[0]
+            act = 'a'
+            if len(inp) > 1:
+                act = inp[1]
+            if act == 'f':
+                switch(full, ch)
 
-    for a in articles: 
+            switch(sels, ch)
+    for i,a in enumerate(articles): 
         paper_title = a['title']
+        if sels and not str(i) in sels:
+            continue
+        print(i, ": ", a['title'])
         file_name = paper_title.replace(' ','_').lower()
-        print("getting ... ", a['title'])
         if not merge:
            f = open(folder + '/' + file_name + '.html', "w")
            print("<!DOCTYPE html>\n<html>\n<body>", file=f)
@@ -48,8 +91,7 @@ def request(query, page = 0, merge=True,  filters = None, sections = None):
         print("<h1>" +  paper_title + "</h1>", file=f)
         for b in a['sections']:
             title =  b['title']
-            if sections and title.lower() not in sections:
-                print("ignoring " + title + " ")
+            if sections and  str(i) not in full  and title.lower() not in sections:
                 continue
             print("<h2>", file=f)
             print(title, file=f)
@@ -60,10 +102,12 @@ def request(query, page = 0, merge=True,  filters = None, sections = None):
 
             print("<p> Paper was:" +  paper_title + "</p>", file=f)
         print("</body>\n</html>", file=f)
-    if not merge:
-       f.close()
+        if not merge:
+          f.close()
+    #for
     if merge:
         f.close()
+    print("Saved into:", folder)
 
 def usage():
    print('request.py -q <query> -p <page> -y year')
@@ -71,11 +115,15 @@ def usage():
 def main(argv):
    query = ''
    merge = 'true'
-   year = '0000'
+   year = ''
    page = 0
    sects = 'abstract introduction conclusion'
+   conf = ""
+   dataset = ""
+   task = ""
+   ls = False
    try:
-       opts, args = getopt.getopt(argv,"hq:p:y:s:m:",["query=","page=","year=","sects=","merge="])
+       opts, args = getopt.getopt(argv,"hlq:p:y:s:m:c:d:t:",["query=","page=","year=","sects=","merge=","conf=","dataset=","task="])
    except getopt.GetoptError:
       usage() 
       sys.exit(2)
@@ -87,8 +135,16 @@ def main(argv):
          query = arg
       elif opt in ("-p", "--page"):
          page = arg
+      elif opt in ("-c", "--conf"):
+         conf = arg
+      elif opt in ("-d", "--dataset"):
+         dataset = arg
+      elif opt in ("-t", "--task"):
+         task = arg
       elif opt in ("-y", "--year"):
          year = arg
+      elif opt in ("-l", "--list"):
+         ls = True
       elif opt in ("-m", "--merge"):
          sects = arg
       elif opt in ("-s", "--sects"):
@@ -98,17 +154,24 @@ def main(argv):
    print("year:", year)
    print("sects:", sects)
    print("merge:", merge)
+   print("list:", ls)
    if not query:
      print('query is mandatory')
      sys.exit(2)
    
    filters = {}
-   if year != "0000":
+   if conf != "":
+      filters["conference"] =  conf
+   if task != "":
+      filters["task"] = task
+   if dataset != "":
+      filters["dataset"] =  dataset
+   if year != "":
       filters["year"] =  year
    sect_list = []
    if sects != "all":
       sect_list = sects.split()
-   request(query, page, merge =='true', filters, sect_list)
+   request(query, page, merge =='true', ls, filters, sect_list)
 
 if __name__ == "__main__":
    main(sys.argv[1:])
