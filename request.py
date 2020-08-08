@@ -10,8 +10,6 @@ from termcolor import colored
 import getch as gh
 from utility import *
 
-
-
 def err(msg):
     print("")
     print("\t"+msg)
@@ -92,7 +90,7 @@ def request(query, page = 1, size=40, filters = None):
     cend2 = '\033[0m'
     cgray = '\033[90m'
     if N == 0:
-        return "No result fond"
+        return "No result fond!"
     while ch != 'q' and ch != 'g':
         os.system('clear')
         k = max(k, 0)
@@ -117,19 +115,21 @@ def request(query, page = 1, size=40, filters = None):
                    # print(cgray + b["title"] + cend2)
                else:
                    frags_num = len(b['fragments'])
+                   frags_text = ""
+                   for c in b['fragments']:
+                       frags_text += '\n\n' + c['text']
+                   sents = split_into_sentences(frags_text)    
+                   frags_num = len(sents)
                    sect_title = b["title"] + f"({fc+1}/{frags_num})" 
                    #print(colored(sect_title + , 'yellow'))
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        print('\x1b[0;30;44m' + sect_title + cend)
                    else:
                        print('\x1b[1;30;38m' + sect_title + cend)
-                   fn = 0
-                   for c in b['fragments']:
+                   for fn, text in enumerate(sents):
                        if fn == fc:
-                          text= c['text']
                           frag = "\n".join(textwrap.wrap(text, 80)) # wrap at 60 characters
                           print(textwrap.indent(colored(frag ,'green'), " "*10)) # indent with 10 spaces                          
-                       fn += 1
                sn += 1
         else:
             print("\n\n")
