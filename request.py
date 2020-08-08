@@ -95,6 +95,8 @@ def request(query, page = 1, size=40, filters = None):
         return "No result fond"
     while ch != 'q' and ch != 'g':
         os.system('clear')
+        k = max(k, 0)
+        k = min(k, size-1)
         art = articles[k]
         art_id = art['id']
         if mode == 'd':
@@ -168,6 +170,10 @@ def request(query, page = 1, size=40, filters = None):
                 sels[art_id] = [cur_sect]
         if ch == 'p':
             k-=1
+        if ch == ":":
+            show_cursor()
+            cmd = input(":")
+            hide_cursor()
 
         if ch == 'n':
             k+=1
@@ -223,48 +229,54 @@ def request(query, page = 1, size=40, filters = None):
                     k +=1
                     sc = 0
         sc = max(sc, -1)
-        k = max(k, 0)
-        k = min(k, size-1)
         if k >= start + 15:
             ch = 'pgdown'
         if k < start:
             ch = "prev_pg"
         if ch == 'pgdown':
-            start += 15
-            start = min(start, N - 15)
-            k = start
+            if mode == 'list':
+                start += 15
+                start = min(start, N - 15)
+                k = start
+            else:
+                k +=1
         if ch == 'pgup' or ch == 'prev_pg':
-            start -= 15
-            start = max(start, 0)
-            k = start + 14 if ch == 'prev_pg' else start
+            if mode == 'list':
+                start -= 15
+                start = max(start, 0)
+                k = start + 14 if ch == 'prev_pg' else start
+            else:
+                k -= 1
         if ch == 'w' or ch == 'm':
             merge = ch == 'm'
             if not sels:
                 print_there(80,10,colored("No article selected!!",'red'))
             else:
-                os.system("clear")
                 if merge:
                     f = open(folder + '.html', "w")
                     print("<!DOCTYPE html>\n<html>\n<body>", file=f)
                 elif not os.path.exists(folder):
                     os.makedirs(folder)
+                num = 0
                 for j,a in enumerate(articles): 
                     i = start + j
+                    _id = a["id"]
+                    if  _id not in sels:
+                        continue
+                    num += 1
                     paper_title = a['title']
-                    print(i, ",")
+                    print_there(80,10, paper_title + '...')
                     file_name = paper_title.replace(' ','_').lower()
                     if not merge:
                        f = open(folder + '/' + file_name + '.html', "w")
                        print("<!DOCTYPE html>\n<html>\n<body>", file=f)
                     print("<h1>" +  "New Paper" + "</h1>", file=f)
                     print("<h1>" +  paper_title + "</h1>", file=f)
-                    _id = a["id"]
                     for b in a['sections']:
                         title =  b['title']
-                        if sels and _id in sels:
-                            _sect = sels[_id]
-                            if not title.lower() in _sects:
-                                continue
+                        _sects = sels[_id]
+                        if not title.lower() in _sects:
+                            continue
                         print("<h2>", file=f)
                         print(title, file=f)
                         print("</h2>", file=f)
@@ -279,7 +291,7 @@ def request(query, page = 1, size=40, filters = None):
                 #for
                 if merge:
                     f.close()
-                print(" were downloaded and saved into:" + folder)
+                print_there(80,10, str(num)+ " articles were downloaded and saved into:" + folder)
             ch = get_key()
     return "" 
 
