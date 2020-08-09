@@ -144,7 +144,7 @@ def request(std, query, page = 1, size=40, filters = None):
                    sect_title = b["title"]
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        # print_there(sn,0, b["title"], sect_win, 7)
-                       mprint(sect_title, text_win, cW_cC, True)
+                       mprint(sect_title, text_win, cW_cB, True)
                    else:
                        # print_there(sn, 0, b["title"], sect_win, 10)
                        mprint(sect_title, text_win, cB, True)
@@ -163,7 +163,7 @@ def request(std, query, page = 1, size=40, filters = None):
                    sect_title = b["title"] + f"({fc+1}/{frags_num})" 
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        # print_there(sn,0, sect_title, sect_win, 7)
-                       mprint(sect_title, text_win, cW_cC)
+                       mprint(sect_title, text_win, cW_cB)
                    else:
                        # print_there(sn,0, sect_title, sect_win, 10)
                        mprint(sect_title, text_win, cC, True)
@@ -172,28 +172,26 @@ def request(std, query, page = 1, size=40, filters = None):
                        if fn == fc:
                           frag = "\n".join(textwrap.wrap(text, 80)) 
                           # print(textwrap.indent(colored(frag ,'green'), " "*10)) 
-                          mprint(text, text_win, cG)
+                          mprint(frag, text_win, cG)
                           # print_there(0,0, frag, text_win, 3)
 
 
                sn += 1
         else:
-            row = 4
             for j,a in enumerate(articles[start:start + 15]): 
-                row += 1
                 i = start + j
                 paper_title =  a['title']
                 dots = ""
                 if len(paper_title) > 80:
                    dots = "..."
-                item = "{}{}{}".format(i, ":", paper_title[:80] + dots)               
+                item = "{}{} {}".format(i, ":", paper_title[:73] + dots)               
                 color = 0
                 if a["id"] in sels:
-                    color = 3
+                    color = clG
                 if i == k:
-                    color = 5
+                    color = clC
 
-                print_there(row, 5, item, std, color)
+                mprint(item, text_win, color)
 
         #print(":", end="", flush=True)
         ch = get_key(std)
@@ -370,6 +368,8 @@ def request(std, query, page = 1, size=40, filters = None):
     return "" 
 
 def main(std):
+
+    global cR, cG ,cY ,cB ,cPink ,cC ,clC ,clY ,cGray ,clGray ,clG , cllC ,cO, cW_cB
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
@@ -395,24 +395,25 @@ def main(std):
         cur.init_pair(i + 1, i, -1)
     cur.init_pair(250, cur.COLOR_WHITE, cur.COLOR_BLUE)
 
+    menu_win = cur.newwin(10, 50, 3, 5)
+    sub_menu_win = cur.newwin(12,30,3,60)
     hide_cursor()
     _help = False
     for opt in opts:
        if opt in ranges:
            opts[opt] = ranges[opt][ind[opt]]
+    print_there(2,0, "<< Nodreader V 1.0 >>".center(80))
     while ch != ord('q'):
-        clear_screen(std)
-        print_there(2,0, "<< Nodreader V 1.0 >>".center(80))
+        clear_screen(menu_win)
+        clear_screen(sub_menu_win)
         sel = list(opts)[mi]
         if sel in ranges:
             opts[sel] = ranges[sel][ind[sel]]
-        row = 5
         for k, v in opts.items():
-           row += 1
            if k == sel:
                if mode == 'm' or sel in ranges:
-                   print_there(row, 5, "{}:{}".format(k, v), std, 4)
-                   # std.addstr(10,10,colored("{:}:{}".format(k, v),"yellow"))
+                   mprint("{}:{}".format(k, v), menu_win, clG)
+                   # menu_win.addstr(10,10,colored("{:}:{}".format(k, v),"yellow"))
                if mode == 's':
                  if sel not in ranges:
                      cur.nocbreak()
@@ -421,26 +422,26 @@ def main(std):
                      opts[sel] = val
                      mode = 'm'
                  else:
-                     count = 5
+                     count = 0
+                     clear_screen(sub_menu_win)
                      for vi, v in enumerate(ranges[sel]):
                        count += 1
                        if count > 10:
                            break
                        if vi == ind[sel]:
-                          print_there(count, 30, str(v), std, 5)
+                          mprint(str(v),sub_menu_win, cO)
                        else:
-                          print_there(count, 30, str(v), std, 7)
+                          mprint(str(v), sub_menu_win, cC)
            else:
-               print_there(row, 5, "{}:{}".format(k, v), std)
-               # std.addstr(10,10,"{:}:{}".format(k, v))
+               mprint("{}:{}".format(k, v), menu_win)
+               # menu_win.addstr(10,10,"{:}:{}".format(k, v))
         if _help:
             if mode == 'm':
-                print("\n\nPress right arrow key to enter or a select a value, Press g to run the query")
+               mprint("Press right arrow key to enter or a select a value, Press g to run the query", win_help)
             else:
-                print("\n\nAfter selcting a value, press left arrow key to return to main menu")
+               mprint("After selcting a value, press left arrow key to return to main menu", win_help)
         ch = get_key(std)
         
-        print("ch:", ch)
         if ch == ord(':'):
             # show_cursor()
             cmd = input(":")
@@ -491,10 +492,8 @@ def main(std):
             # show_cursor()
             break;
         elif ch == ord('r') or ch == ord('g'): 
-            print("")
             for k,v in opts.items():
                 if k in filter_items and v and v != "All":
-                    print(k,v)
                     filters[k] = str(v)
             clear_screen(std)
             try:
@@ -505,8 +504,6 @@ def main(std):
                 # show_cursor()
                 ch = ord('q')
 
-
-    print("")
 
 if __name__ == "__main__":
     wrapper(main)
