@@ -98,10 +98,16 @@ def request(std, query, page = 1, size=40, filters = None):
     cend = '\x1b[0m'
     cend2 = '\033[0m'
     cgray = '\033[90m'
+    begin_x = 10; begin_y = 1 
+    height = 4; width = 80
+    title_win = cur.newwin(height, width, begin_y, begin_x)
+    text_win = cur.newwin(40, 80, 3, 5)
+    sect_win = cur.newwin(40, 20, 3, 0)
+    # text_win = std
     if N == 0:
         return "No result fond!"
-    while ch != 'q' and ch != 'g':
-        clear_screen(std)
+    while ch != ord('q') and ch != ord('g'):
+        clear_screen(text_win)
         k = max(k, 0)
         k = min(k, size-1)
         art = articles[k]
@@ -109,21 +115,22 @@ def request(std, query, page = 1, size=40, filters = None):
         if mode == 'd':
            a = art
            clear_screen(std)
-           print("")
            sn = 0
            sects_num = len(a["sections"])
            sc = max(sc, 0)
            sc = min(sc, sects_num)
            title = "\n".join(textwrap.wrap(a["title"], 80)) # wrap at 60 characters
            top =  "["+str(k)+"] " + title
-           print(textwrap.indent(colored(top,'yellow'), " "*10)) # indent with 10 spaces    
+           print_there(0, 0, top,  title_win, 8) 
            for b in a["sections"]:
                if sn != sc:
+                   sect_title = b["title"]
                    if art_id in sels and b["title"].lower() in sels[art_id]:
-                       print('\x1b[0;30;44m' + " " + b["title"] + cend)
+                       # print_there(sn,0, b["title"], sect_win, 7)
+                       mprint(sect_title, text_win, 14, True)
                    else:
-                       print('\x1b[1;30;38m' + " " + b["title"] + cend)
-                   # print(cgray + b["title"] + cend2)
+                       # print_there(sn, 0, b["title"], sect_win, 10)
+                       mprint(sect_title, text_win, 5, True)
                else:
                    frags_num = len(b['fragments'])
                    frags_text = ""
@@ -137,33 +144,39 @@ def request(std, query, page = 1, size=40, filters = None):
                    sents = split_into_sentences(frags_text)    
                    frags_num = len(sents)
                    sect_title = b["title"] + f"({fc+1}/{frags_num})" 
-                   #print(colored(sect_title + , 'yellow'))
                    if art_id in sels and b["title"].lower() in sels[art_id]:
-                       print('\x1b[0;30;44m' + " " + sect_title + cend)
+                       # print_there(sn,0, sect_title, sect_win, 7)
+                       mprint(sect_title, text_win, 7)
                    else:
-                       print('\x1b[1;30;38m' + " " +sect_title + cend)
+                       # print_there(sn,0, sect_title, sect_win, 10)
+                       mprint(sect_title, text_win, 10)
+                   # mprint(frags_text, text_win, 4)
                    for fn, text in enumerate(sents):
                        if fn == fc:
-                          frag = "\n".join(textwrap.wrap(text, 80)) # wrap at 60 characters
-                          print(textwrap.indent(colored(frag ,'green'), " "*10)) # indent with 10 spaces  
+                          frag = "\n".join(textwrap.wrap(text, 80)) 
+                          # print(textwrap.indent(colored(frag ,'green'), " "*10)) 
+                          mprint(text, text_win, 4)
+                          # print_there(0,0, frag, text_win, 3)
+
 
                sn += 1
         else:
-            print("\n\n")
+            row = 4
             for j,a in enumerate(articles[start:start + 15]): 
+                row += 1
                 i = start + j
                 paper_title =  a['title']
                 dots = ""
                 if len(paper_title) > 80:
                    dots = "..."
-                item = "{:>5}{:4}{}".format(i, ":", paper_title[:80] + dots)               
-                color = 'white'
+                item = "{}{}{}".format(i, ":", paper_title[:80] + dots)               
+                color = 0
                 if a["id"] in sels:
-                    color = 'green'
+                    color = 3
                 if i == k:
-                    color = 'yellow'
+                    color = 5
 
-                print(colored(item, color))
+                print_there(row, 5, item, std, color)
 
         #print(":", end="", flush=True)
         ch = get_key(std)
@@ -220,7 +233,7 @@ def request(std, query, page = 1, size=40, filters = None):
                     arg = cmd[1].strip()
                     if cmd == 'w':
                         folder = arg
-        if ch == ord('n'i):
+        if ch == ord('n'):
             k+=1
         if ch == cur.KEY_RIGHT and mode == 'd': 
                 fc += 1
@@ -252,7 +265,7 @@ def request(std, query, page = 1, size=40, filters = None):
                 fc = 0
             else:
                 k = start
-        elif ch == cur.key_END:
+        elif ch == cur.KEY_END:
             if mode == 'd':
                 sc = sects_num
                 fc = 0
@@ -363,7 +376,7 @@ def main(std):
     cur.use_default_colors()
     for i in range(0, cur.COLORS):
         cur.init_pair(i + 1, i, -1)
-
+    cur.init_pair(14, cur.COLOR_WHITE, cur.COLOR_BLUE)
     hide_cursor()
     _help = False
     for opt in opts:
@@ -380,7 +393,7 @@ def main(std):
            row += 1
            if k == sel:
                if mode == 'm' or sel in ranges:
-                   print_there(row, 5, "{}:{}".format(k, v), std, 3)
+                   print_there(row, 5, "{}:{}".format(k, v), std, 4)
                    # std.addstr(10,10,colored("{:}:{}".format(k, v),"yellow"))
                if mode == 's':
                  if sel not in ranges:
