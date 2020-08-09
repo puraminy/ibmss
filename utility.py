@@ -11,10 +11,10 @@ if os.name == 'nt':
         _fields_ = [("size", ctypes.c_int),
                     ("visible", ctypes.c_byte)]
 
-def hide_cursor():
-    cur.curs_set(0)
-    return
-    if os.name == 'nt':
+def hide_cursor(useCur = True):
+    if useCur:
+        cur.curs_set(0)
+    elif os.name == 'nt':
         ci = _CursorInfo()
         handle = ctypes.windll.kernel32.GetStdHandle(-11)
         ctypes.windll.kernel32.GetConsoleCursorInfo(handle, ctypes.byref(ci))
@@ -24,10 +24,10 @@ def hide_cursor():
         sys.stdout.write("\033[?25l")
         sys.stdout.flush()
 
-def show_cursor():
-    cur.curs_set(1)
-    return
-    if os.name == 'nt':
+def show_cursor(useCur = True):
+    if useCur:
+        cur.curs_set(1)
+    elif os.name == 'nt':
         ci = _CursorInfo()
         handle = ctypes.windll.kernel32.GetStdHandle(-11)
         ctypes.windll.kernel32.GetConsoleCursorInfo(handle, ctypes.byref(ci))
@@ -37,14 +37,32 @@ def show_cursor():
         sys.stdout.write("\033[?25h")
         sys.stdout.flush()
 
-
-def print_there(x, y, text, stdscr = None, color=0):
-    if stdscr is not None:
-         stdscr.addstr(x, y, text, cur.color_pair(color))
-         stdscr.refresh()
+def mprint(text, stdscr =None, color=0, bold=False, end="\n"):
+    if stdscr is None:
+        print(text, end=end)
     else:
-         sys.stdout.write("\x1b7\x1b[%d;%df%s\x1b8" % (x, y, text))
-         sys.stdout.flush()
+        c = color
+        if bold:
+            c = cur.A_BOLD
+            if cur.has_colors():
+                cur.init_pair(color, cur.COLOR_GREEN, cur.COLOR_BLACK)
+                c |= cur.color_pair(color)
+        stdscr.addstr(text + end, cur.color_pair(c))
+        stdscr.refresh()
+
+def print_there(x, y, text, stdscr = None, color=0, bold = False):
+    if stdscr is not None:
+        c = color
+        if bold:
+            c = cur.A_BOLD
+            if cur.has_colors():
+                cur.init_pair(color, cur.COLOR_GREEN, cur.COLOR_BLACK)
+                c |= cur.color_pair(color)
+        stdscr.addstr(x, y, text, cur.color_pair(c))
+        stdscr.refresh()
+    else:
+        sys.stdout.write("\x1b7\x1b[%d;%df%s\x1b8" % (x, y, text))
+        sys.stdout.flush()
 def clear_screen(stdscr = None):
     if stdscr is not None:
         stdscr.clear()
