@@ -13,6 +13,21 @@ from utility import *
 import curses as cur
 from curses import wrapper
 
+cR = 2
+cG = 3
+cY = 4
+cB = 5
+cPink = 14
+cC = 7
+clC = 15
+clY = 12
+cGray = 9
+clGray = 249
+clG = 11
+cllC = 82
+cO = 209
+cW_cB = 250
+
 def err(msg):
     print("")
     print(""+msg)
@@ -30,6 +45,8 @@ def switch(d, art, ch):
         del d[key]
 
 def request(std, query, page = 1, size=40, filters = None):
+    global cR, cG ,cY ,cB ,cPink ,cC ,clC ,clY ,cGray ,clGray ,clG , cllC ,cO, cW_cB
+
     page = int(page)
     page -= 1
 
@@ -121,16 +138,16 @@ def request(std, query, page = 1, size=40, filters = None):
            sc = min(sc, sects_num)
            title = "\n".join(textwrap.wrap(a["title"], 80)) # wrap at 60 characters
            top =  "["+str(k)+"] " + title
-           print_there(0, 0, top,  title_win, 8) 
+           print_there(0, 0, top,  title_win, cC) 
            for b in a["sections"]:
                if sn != sc:
                    sect_title = b["title"]
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        # print_there(sn,0, b["title"], sect_win, 7)
-                       mprint(sect_title, text_win, 14, True)
+                       mprint(sect_title, text_win, cW_cC, True)
                    else:
                        # print_there(sn, 0, b["title"], sect_win, 10)
-                       mprint(sect_title, text_win, 5, True)
+                       mprint(sect_title, text_win, cB, True)
                else:
                    frags_num = len(b['fragments'])
                    frags_text = ""
@@ -146,16 +163,16 @@ def request(std, query, page = 1, size=40, filters = None):
                    sect_title = b["title"] + f"({fc+1}/{frags_num})" 
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        # print_there(sn,0, sect_title, sect_win, 7)
-                       mprint(sect_title, text_win, 7)
+                       mprint(sect_title, text_win, cW_cC)
                    else:
                        # print_there(sn,0, sect_title, sect_win, 10)
-                       mprint(sect_title, text_win, 10)
+                       mprint(sect_title, text_win, cC, True)
                    # mprint(frags_text, text_win, 4)
                    for fn, text in enumerate(sents):
                        if fn == fc:
                           frag = "\n".join(textwrap.wrap(text, 80)) 
                           # print(textwrap.indent(colored(frag ,'green'), " "*10)) 
-                          mprint(text, text_win, 4)
+                          mprint(text, text_win, cG)
                           # print_there(0,0, frag, text_win, 3)
 
 
@@ -376,7 +393,8 @@ def main(std):
     cur.use_default_colors()
     for i in range(0, cur.COLORS):
         cur.init_pair(i + 1, i, -1)
-    cur.init_pair(14, cur.COLOR_WHITE, cur.COLOR_BLUE)
+    cur.init_pair(250, cur.COLOR_WHITE, cur.COLOR_BLUE)
+
     hide_cursor()
     _help = False
     for opt in opts:
