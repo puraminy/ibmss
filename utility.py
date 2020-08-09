@@ -41,24 +41,18 @@ def mprint(text, stdscr =None, color=0, bold=False, end="\n"):
     if stdscr is None:
         print(text, end=end)
     else:
-        c = color
+        c = cur.color_pair(color)
         if bold:
-            c = cur.A_BOLD
-            if cur.has_colors():
-                cur.init_pair(color, cur.COLOR_GREEN, cur.COLOR_BLACK)
-                c |= cur.color_pair(color)
-        stdscr.addstr(text + end, cur.color_pair(c))
+            c = cur.color_pair(color) | cur.A_BOLD
+        stdscr.addstr(text + end, c)
         stdscr.refresh()
 
 def print_there(x, y, text, stdscr = None, color=0, bold = False):
     if stdscr is not None:
-        c = color
+        c = cur.color_pair(color)
         if bold:
-            c = cur.A_BOLD
-            if cur.has_colors():
-                cur.init_pair(color, cur.COLOR_GREEN, cur.COLOR_BLACK)
-                c |= cur.color_pair(color)
-        stdscr.addstr(x, y, text, cur.color_pair(c))
+            c = cur.color_pair(color) | cur.A_BOLD
+        stdscr.addstr(x, y, text, c)
         stdscr.refresh()
     else:
         sys.stdout.write("\x1b7\x1b[%d;%df%s\x1b8" % (x, y, text))
