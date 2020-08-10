@@ -63,6 +63,46 @@ def clear_screen(stdscr = None):
         stdscr.refresh()
     else:
         os.system('clear')
+def minput(stdscr, r, c, prompt_string, default=""):
+    show_cursor()
+    cur.echo() 
+    stdscr.addstr(r, c, prompt_string)
+    stdscr.refresh()
+    input = stdscr.getstr(r, len(prompt_string), 30)
+    clear_screen(stdscr)
+    hide_cursor()
+    try:
+        inp = input.decode('UTF-8')  
+        cur.noecho()
+        return inp
+    except:
+        hide_cursor()
+        cur.noecho()
+        return default
+
+def rinput(stdscr, r, c, prompt_string):
+    stdscr.addstr(r, c, prompt_string)
+    stdscr.refresh()
+    inp = ""
+    ch = 'b'
+    show_cursor()
+    while ch != cur.KEY_ENTER and ch != 10:
+        ch = stdscr.getch()
+        clear_screen(stdscr)
+        if ch == 127 or ch == cur.KEY_BACKSPACE:
+            inp=inp[:-1]
+        if ch == 27:
+            hide_cursor()
+            return "<ESC>"
+        else:
+            ch =chr(ch)
+            if ch.isalnum() or ch in [' ','-','_',':','.','?','+']:
+                inp += ch
+            else:
+                cur.beep()
+        stdscr.addstr(r, len(prompt_string)+1, inp)
+    hide_cursor()
+    return inp  
 
 def get_key(stdscr = None):
     if stdscr is not None:
