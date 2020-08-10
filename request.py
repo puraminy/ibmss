@@ -73,7 +73,9 @@ def request(std, query, page = 1, size=40, filters = None):
     #data ='{"query":"reading comprehension","filters":{},"page":0,"size":30,"sort":null,"sessionInfo":""}'
 
     # print(data)
-    print("\n\n\nGetting articles...")
+    rows, cols = std.getmaxyx()
+    win_help = cur.newwin(1, cols, rows-1,0) 
+    show_help("Getting articles...", win_help)
     try:
         response = requests.post('https://dimsum.eu-gb.containers.appdomain.cloud/api/scholar/search', headers=headers, data=data)
     except requests.exceptions.HTTPError as errh:
@@ -367,6 +369,25 @@ def request(std, query, page = 1, size=40, filters = None):
             ch = get_key(std)
     return "" 
 
+def refresh_menu(opts, menu_win, sel):
+    global clG
+    clear_screen(menu_win)
+    for k, v in opts.items():
+       if k == sel:
+           mprint("{:<15}:{}".format(k, v), menu_win, clG)
+       else:
+           mprint("{:<15}:{}".format(k, v), menu_win)
+
+def get_sel(opts, mi):
+    mi = max(mi, 0)
+    mi = mi if mi < len(opts) else 0 
+    return list(opts)[mi], mi
+
+def show_help(msg, win):
+    global cC
+    clear_screen(win)
+    print_there(0,1, msg, win, cC)
+
 def main(std):
 
     global cR, cG ,cY ,cB ,cPink ,cC ,clC ,clY ,cGray ,clGray ,clG , cllC ,cO, cW_cB
@@ -396,50 +417,49 @@ def main(std):
     cur.init_pair(250, cur.COLOR_WHITE, cur.COLOR_BLUE)
 
     menu_win = cur.newwin(10, 50, 3, 5)
-    sub_menu_win = cur.newwin(12,30,3,60)
+    sub_menu_win = cur.newwin(12,30,5,50)
+    rows, cols = std.getmaxyx()
+    win_help = cur.newwin(1, cols, rows-1,0) 
     hide_cursor()
     _help = False
     for opt in opts:
        if opt in ranges:
            opts[opt] = ranges[opt][ind[opt]]
+    clear_screen(std)
     print_there(2,0, "<< Nodreader V 1.0 >>".center(80))
     while ch != ord('q'):
-        clear_screen(menu_win)
         clear_screen(sub_menu_win)
-        sel = list(opts)[mi]
+        sel,mi = get_sel(opts, mi)
         if sel in ranges:
             opts[sel] = ranges[sel][ind[sel]]
-        for k, v in opts.items():
-           if k == sel:
-               if mode == 'm' or sel in ranges:
-                   mprint("{}:{}".format(k, v), menu_win, clG)
-                   # menu_win.addstr(10,10,colored("{:}:{}".format(k, v),"yellow"))
-               if mode == 's':
-                 if sel not in ranges:
-                     cur.nocbreak()
-                     val = input(colored("{}:".format(k),"yellow"))
-                     cur.cbreak()
-                     opts[sel] = val
-                     mode = 'm'
-                 else:
-                     count = 0
-                     clear_screen(sub_menu_win)
-                     for vi, v in enumerate(ranges[sel]):
-                       count += 1
-                       if count > 10:
-                           break
-                       if vi == ind[sel]:
-                          mprint(str(v),sub_menu_win, cO)
-                       else:
-                          mprint(str(v), sub_menu_win, cC)
+
+        refresh_menu(opts, menu_win, sel)
+        if mode == 's':
+           if sel not in ranges:
+              opts[sel]=""
+              refresh_menu(opts, menu_win, sel)
+              val = minput(menu_win, mi + 0, 0, "{:<15}".format(sel) + ":") 
+              opts[sel] = val
+              mi += 1
+              sel,mi = get_sel(opts, mi)
+              refresh_menu(opts, menu_win, sel)
+              mode = 'm'
            else:
-               mprint("{}:{}".format(k, v), menu_win)
-               # menu_win.addstr(10,10,"{:}:{}".format(k, v))
+              count = 0
+              for vi, v in enumerate(ranges[sel]):
+                count += 1
+                if count > 10:
+                    break
+                if vi == ind[sel]:
+                   mprint(str(v),sub_menu_win, cO)
+                else:
+                   mprint(str(v), sub_menu_win, cC)
+
         if _help:
             if mode == 'm':
-               mprint("Press right arrow key to enter or a select a value, Press g to run the query", win_help)
+                show_help("test", win_help)
             else:
-               mprint("After selcting a value, press left arrow key to return to main menu", win_help)
+                show_help("tttt", win_help)
         ch = get_key(std)
         
         if ch == ord(':'):
@@ -477,8 +497,6 @@ def main(std):
             elif sel in ranges:
                 ind[sel] -= 1
 
-        mi = max(mi, 0)
-        mi = mi if mi < len(opts) else 0 
         if sel in ranges:
             ind[sel] = min(ind[sel], len(ranges[sel]))
             ind[sel] = max(ind[sel], 0)
