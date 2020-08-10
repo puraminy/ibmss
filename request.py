@@ -12,7 +12,7 @@ import getch as gh
 from utility import *
 import curses as cur
 from curses import wrapper
-
+cW = 0
 cR = 2
 cG = 3
 cY = 4
@@ -45,12 +45,14 @@ def switch(d, art, ch):
         del d[key]
 
 def request(std, query, page = 1, size=40, filters = None):
-    global cR, cG ,cY ,cB ,cPink ,cC ,clC ,clY ,cGray ,clGray ,clG , cllC ,cO, cW_cB
+    global cW, cR, cG ,cY ,cB ,cPink ,cC ,clC ,clY ,cGray ,clGray ,clG , cllC ,cO, cW_cB
+     
 
     page = int(page)
     page -= 1
 
-    opts = {"output":"", "merge":True}
+    clear_screen(std)
+    opts = {"output":"","text_color":246, "head_color":cGray, "merge":True}
     ranges = {}
     ind = {}
     #if not query and task == "All":
@@ -75,7 +77,7 @@ def request(std, query, page = 1, size=40, filters = None):
     # print(data)
     rows, cols = std.getmaxyx()
     win_help = cur.newwin(1, cols, rows-1,0) 
-    show_help("Getting articles...", win_help)
+    show_info("Getting articles...", win_help)
     try:
         response = requests.post('https://dimsum.eu-gb.containers.appdomain.cloud/api/scholar/search', headers=headers, data=data)
     except requests.exceptions.HTTPError as errh:
@@ -87,6 +89,7 @@ def request(std, query, page = 1, size=40, filters = None):
     except requests.exceptions.RequestException as err:
         print ("OOps: Something Else",err)
 
+    clear_screen(std)
     conference = ''
     if "conference" in filters:
         conference = filters['conference']
@@ -120,8 +123,8 @@ def request(std, query, page = 1, size=40, filters = None):
     begin_x = 10; begin_y = 1 
     height = 4; width = 80
     title_win = cur.newwin(height, width, begin_y, begin_x)
-    text_win = cur.newwin(40, 80, 3, 5)
-    sect_win = cur.newwin(40, 20, 3, 0)
+    text_win = cur.newwin(rows - 5, 80, 3, 5)
+    sect_win = cur.newwin(rows - 5, 20, 3, 0)
     # text_win = std
     if N == 0:
         return "No result fond!"
@@ -149,7 +152,7 @@ def request(std, query, page = 1, size=40, filters = None):
                        mprint(sect_title, text_win, cW_cB, True)
                    else:
                        # print_there(sn, 0, b["title"], sect_win, 10)
-                       mprint(sect_title, text_win, cB, True)
+                       mprint(sect_title, text_win, cGray, True)
                else:
                    frags_num = len(b['fragments'])
                    frags_text = ""
@@ -168,13 +171,13 @@ def request(std, query, page = 1, size=40, filters = None):
                        mprint(sect_title, text_win, cW_cB)
                    else:
                        # print_there(sn,0, sect_title, sect_win, 10)
-                       mprint(sect_title, text_win, cC, True)
+                       mprint(sect_title, text_win, int(opts["head_color"]), True)
                    # mprint(frags_text, text_win, 4)
                    for fn, text in enumerate(sents):
                        if fn == fc:
-                          frag = "\n".join(textwrap.wrap(text, 80)) 
-                          # print(textwrap.indent(colored(frag ,'green'), " "*10)) 
-                          mprint(frag, text_win, cG)
+                          frag = "\n".join(textwrap.wrap(text, 76)) 
+                          frag =  textwrap.indent(frag, " "*2) 
+                          mprint(frag, text_win, int(opts["text_color"]))
                           # print_there(0,0, frag, text_win, 3)
 
 
@@ -221,9 +224,7 @@ def request(std, query, page = 1, size=40, filters = None):
         if ch == ord('p'):
             k-=1
         if ch == ord(":"):
-            show_cursor()
-            cmd = input(":")
-            hide_cursor()
+            cmd = minput(win_help, 0, 0, ":")
             cmd = cmd.strip()
             if len(cmd) == 1:
                 ch = cmd
@@ -232,7 +233,7 @@ def request(std, query, page = 1, size=40, filters = None):
                 key = cmd[0].strip()
                 val = cmd[1].strip()
                 if key not in opts:
-                    err(key + "is an invalid option")
+                    show_err(key + " is an invalid option, press any key...", win_help)
                 else:
                    mi = list(opts.keys()).index(key)
                    if key not in ranges:
@@ -242,7 +243,7 @@ def request(std, query, page = 1, size=40, filters = None):
                             opts[key] = val
                             ind[key] = ranges[key].index(val)
                         else:
-                            err(val + " is invalid for " + key)
+                            show_err(val + " is invalid for " + key + ", press any key ...", win_help)
             else:
                 cmd = re.split(r'\s(?=")', cmd) 
                 if len(cmd) > 1:
@@ -383,10 +384,14 @@ def get_sel(opts, mi):
     mi = mi if mi < len(opts) else 0 
     return list(opts)[mi], mi
 
-def show_help(msg, win):
-    global cC
+def show_info(msg, win, color=cC):
     clear_screen(win)
-    print_there(0,1, msg, win, cC)
+    print_there(0,1, msg, win, color)
+
+def show_err(msg, win, color=cR):
+   show_info(msg, win, color)
+   win.getch()
+   clear_screen(win)
 
 def main(std):
 
@@ -428,6 +433,7 @@ def main(std):
     clear_screen(std)
     print_there(2,0, "<< Nodreader V 1.0 >>".center(80))
     while ch != ord('q'):
+        clear_screen(std)
         clear_screen(sub_menu_win)
         sel,mi = get_sel(opts, mi)
         if sel in ranges:
@@ -457,9 +463,9 @@ def main(std):
 
         if _help:
             if mode == 'm':
-                show_help("test", win_help)
+                show_info("Press <Enter> to set a value, r to search and q to quit.", win_help)
             else:
-                show_help("tttt", win_help)
+                show_info("Press <Enter> to set a value", win_help)
         ch = get_key(std)
         
         if ch == ord(':'):
