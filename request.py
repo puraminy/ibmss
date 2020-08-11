@@ -70,12 +70,15 @@ def request(std, query, page = 1, size=40, filters = None):
 
     clear_screen(std)
     opts = load_obj("art_opts")
+    colors = [str(y) for y in range(510)]
     if opts is None:
-        opts = {"output":"","text-color":246, "head-color":cGray, "merge":True}
-    ranges = {"text-color":[str(y) for y in range(255)]}
-    inds = load_obj("art_inds")
-    if inds is None:
-        inds = {}
+        opts = {
+                "text-color":'246', 
+                "head-color": str(cGray)
+                }
+
+
+    ranges = {"text-color":colors, "head-color": colors}
 
     headers = {
         'Connection': 'keep-alive',
@@ -169,10 +172,10 @@ def request(std, query, page = 1, size=40, filters = None):
                    sect_title = b["title"]
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        # print_there(sn,0, b["title"], sect_win, 7)
-                       mprint(sect_title, text_win, cW_cB, True)
+                       mprint(sect_title, text_win, cW_cB, cur.A_BOLD)
                    else:
                        # print_there(sn, 0, b["title"], sect_win, 10)
-                       mprint(sect_title, text_win, cGray, True)
+                       mprint(sect_title, text_win, cGray, cur.A_BOLD)
                else:
                    frags_num = len(b['fragments'])
                    frags_text = ""
@@ -245,15 +248,17 @@ def request(std, query, page = 1, size=40, filters = None):
         if ch == ord('p'):
             k-=1
         if ch == ord(":"):
-            cmd = get_cmd(opts, ranges, inds, win_help)
+            cmd = get_cmd(opts, ranges, win_help)
             save_obj(opts, "art_opts")
-            save_obj(inds, "art_inds")
             
             if len(cmd) == 1:
                 command = cmd[0].strip()
                 if len(command) == 1:
                     ch = command
-                elif command != "set":
+                elif command == "set":
+                    show_menu(std, opts, ranges)
+                    save_obj(opts, "art_opts")
+                else:
                     show_err("Unknown command:" + command, win_help)
             else:
                 command = cmd[0].strip()
@@ -382,7 +387,7 @@ def request(std, query, page = 1, size=40, filters = None):
             ch = get_key(std)
     return "" 
 
-def get_cmd(opts, ranges, inds, win):
+def get_cmd(opts, ranges, win):
     cmd = minput(win, 0, 0, ":")
     # cmd = re.split(r'\s(?=")', cmd) 
     cmd = shlex.split(cmd)
@@ -411,7 +416,6 @@ def get_cmd(opts, ranges, inds, win):
                else:
                     if val in ranges[key]:
                         opts[key] = val
-                        inds[key] = ranges[key].index(val)
                     else:
                         show_err(val + " is invalid for " + key + ", press any key ...", win)
         return cmd
@@ -419,15 +423,23 @@ def get_cmd(opts, ranges, inds, win):
 def refresh_menu(opts, menu_win, sel):
     global clG
     clear_screen(menu_win)
+    row = 0
     for k, v in opts.items():
        if k == sel:
-           mprint("{:<15}:{}".format(k, v), menu_win, clG)
+           print_there(row, 0, "{:<15}> ".format(k), menu_win, cO)
        else:
-           mprint("{:<15}:{}".format(k, v), menu_win)
+           print_there(row, 0, "{:<15}: ".format(k), menu_win, cB)
+
+       if "color" in sel:
+           print_there(row, 17, "{}".format(str(v) + " SSSS"), menu_win, int(v), cur.A_UNDERLINE) 
+       else:
+           print_there(row, 17, "{}".format(v), menu_win, cW)
+
+       row += 1
 
 def get_sel(opts, mi):
     mi = max(mi, 0)
-    mi = mi if mi < len(opts) else 0 
+    mi = min(mi, len(opts)-1)
     return list(opts)[mi], mi
 
 def show_info(msg, win, color=cC):
@@ -439,12 +451,13 @@ def show_msg(msg, win, color=cG):
    win.getch()
    clear_screen(win)
 
-def show_err(msg, win, color=cR):
+def show_err(msg, win, color=266):
     show_msg(msg, win, color)
 
-def show_menu(std, opts, ranges, inds):
+def show_menu(std, opts, ranges):
 
     mi = 0
+    si = 0
     ch = 'a'
     mode = 'm'
 
@@ -460,30 +473,37 @@ def show_menu(std, opts, ranges, inds):
         clear_screen(std)
         clear_screen(sub_menu_win)
         sel,mi = get_sel(opts, mi)
-        if sel in ranges:
-            opts[sel] = ranges[sel][inds[sel]]
-
         refresh_menu(opts, menu_win, sel)
         if mode == 's':
            if sel not in ranges:
               opts[sel]=""
               refresh_menu(opts, menu_win, sel)
-              val = minput(menu_win, mi + 0, 0, "{:<15}".format(sel) + ":") 
+              val = minput(menu_win, mi + 0, 0, "{:<15}".format(sel) + ": ") 
               opts[sel] = val
               mi += 1
               sel,mi = get_sel(opts, mi)
               refresh_menu(opts, menu_win, sel)
               mode = 'm'
            else:
-              count = 0
-              for vi, v in enumerate(ranges[sel]):
-                count += 1
-                if count > 10:
-                    break
-                if vi == inds[sel]:
-                   mprint(str(v),sub_menu_win, cO)
+              start = si - 5
+              start = max(start, 0)
+              if len(ranges[sel]) > 10:
+                  start = min(start, len(ranges[sel])-10)
+              if start > 0:
+                  mprint("...", sub_menu_win, cW)
+              for vi, v in enumerate(ranges[sel][start:start+10]):
+                if start + vi == si:
+                    if "color" in sel:
+                       mprint(str(v) + " SSSS", sub_menu_win, int(v), cur.A_UNDERLINE) 
+                    else:
+                       mprint(str(v),sub_menu_win, cO)
                 else:
-                   mprint(str(v), sub_menu_win, cC)
+                    if "color" in sel:
+                       mprint(str(v) + " MMMM", sub_menu_win, int(v)) 
+                    else:
+                       mprint(str(v), sub_menu_win, cC)
+              if start + 10 < len(ranges[sel]):
+                  mprint("...", sub_menu_win, cW)
 
         if _help:
             if mode == 'm':
@@ -493,27 +513,46 @@ def show_menu(std, opts, ranges, inds):
         ch = get_key(std)
         
         if ch == ord(':'):
-            cmd = get_cmd(opts, ranges, inds, win_help)
+            cmd = get_cmd(opts, ranges, win_help)
         if ch == ord("h"):
             _help = not _help
         if ch == cur.KEY_DOWN:
             if mode == "m":
                 mi += 1
             elif sel in ranges:
-                inds[sel] += 1
+                si += 1
         if ch == cur.KEY_UP:
             if mode == "m":
                 mi -= 1
             elif sel in ranges:
-                inds[sel] -= 1
+                si -= 1
+        if ch == cur.KEY_NPAGE:
+            if mode == "m":
+                mi += 10
+            elif sel in ranges:
+                si += 10
+        if ch == cur.KEY_PPAGE:
+            if mode == "m":
+                mi -= 10
+            elif sel in ranges:
+                si -= 10
 
         if sel in ranges:
-            inds[sel] = min(inds[sel], len(ranges[sel]))
-            inds[sel] = max(inds[sel], 0)
+            si = min(si, len(ranges[sel]) - 1)
+            si = max(si, 0)
         if  ch == cur.KEY_ENTER or ch == 10 or ch == 13:
-            mode = 's' if mode == 'm' else 'm'
+            if mode == 'm':
+                mode = 's'
+                if sel in ranges:
+                    si = ranges[sel].index(opts[sel])
+            elif mode == 's':
+                opts[sel] = ranges[sel][si]
+                mode = 'm'    
+                si = 0
         if ch == cur.KEY_RIGHT:
             mode = 's'
+            if sel in ranges:
+                si = ranges[sel].index(opts[sel])
         elif ch == cur.KEY_LEFT:
             mode = 'm'
         elif ch == ord('q'):
@@ -539,26 +578,26 @@ def main(std):
             "conference": ["All", "Arxiv", "ACL", "Workshops", "EMNLP", "IJCNLP", "NAACL", "LERC", "CL", "COLING", "BEA"],
             "dataset": ["All","SQuAD", "RACE", "Social Media", "TriviaQA", "SNLI", "GLUE", "Image Net", "MS Marco", "TREC", "News QA" ]
             }
-    inds = load_obj("query_inds")
-    if inds is None:
-        inds = { "conference":0, "year":0, "page":0, "page-size":0, "task":0, "dataset":0 }
 
     for opt in opts:
        if opt in ranges:
-           opts[opt] = ranges[opt][inds[opt]]
+           opts[opt] = ranges[opt][0]
     cur.start_color()
     cur.use_default_colors()
+    c = 1
     for i in range(0, cur.COLORS):
-        cur.init_pair(i + 1, i, -1)
-    cur.init_pair(250, cur.COLOR_WHITE, cur.COLOR_BLUE)
+        cur.init_pair(c, i, -1)
+        c += 1
+    for i in range(0, cur.COLORS):
+        cur.init_pair(c, i, 0)
+        c += 1
 
     clear_screen(std)
     print_there(2,0, "<< Nodreader V 1.0 >>".center(80), std)
     ch = ord('a')
     while ch != ord('q'):
-        ch = show_menu(std, opts, ranges, inds)
+        ch = show_menu(std, opts, ranges)
         save_obj(opts, "query_opts")
-        save_obj(inds, "query_inds")
         if chr(ch) == 'r' or chr(ch) == 'g':
             for k,v in opts.items():
                 if k in filter_items and v and v != "All":
