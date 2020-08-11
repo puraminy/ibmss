@@ -37,22 +37,22 @@ def show_cursor(useCur = True):
         sys.stdout.write("\033[?25h")
         sys.stdout.flush()
 
-def mprint(text, stdscr =None, color=0, bold=False, end="\n"):
+def mprint(text, stdscr =None, color=0, attr = None, end="\n"):
     if stdscr is None:
         print(text, end=end)
     else:
         c = cur.color_pair(color)
-        if bold:
-            c = cur.color_pair(color) | cur.A_BOLD
+        if attr is not None:
+            c = cur.color_pair(color) | attr
         height, width = stdscr.getmaxyx()
         stdscr.addnstr(text + end, height*width-1, c)
         # stdscr.addstr(text + end, c)
         stdscr.refresh()
 
-def print_there(x, y, text, stdscr = None, color=0, bold = False):
+def print_there(x, y, text, stdscr = None, color=0, attr = None):
     if stdscr is not None:
         c = cur.color_pair(color)
-        if bold:
+        if attr is not None:
             c = cur.color_pair(color) | cur.A_BOLD
         height, width = stdscr.getmaxyx()
         stdscr.addnstr(x, y, text, height*width-1, c)
