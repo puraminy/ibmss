@@ -45,8 +45,8 @@ def mprint(text, stdscr =None, color=0, bold=False, end="\n"):
         if bold:
             c = cur.color_pair(color) | cur.A_BOLD
         height, width = stdscr.getmaxyx()
-        # stdscr.addnstr(text + end, height*width-1, c)
-        stdscr.addstr(text + end, c)
+        stdscr.addnstr(text + end, height*width-1, c)
+        # stdscr.addstr(text + end, c)
         stdscr.refresh()
 
 def print_there(x, y, text, stdscr = None, color=0, bold = False):
@@ -55,8 +55,8 @@ def print_there(x, y, text, stdscr = None, color=0, bold = False):
         if bold:
             c = cur.color_pair(color) | cur.A_BOLD
         height, width = stdscr.getmaxyx()
-        # stdscr.addnstr(x, y, text, height*width-1, c)
-        stdscr.addstr(x, y, text, c)
+        stdscr.addnstr(x, y, text, height*width-1, c)
+        #stdscr.addstr(x, y, text, c)
         stdscr.refresh()
     else:
         sys.stdout.write("\x1b7\x1b[%d;%df%s\x1b8" % (x, y, text))
