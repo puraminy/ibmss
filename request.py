@@ -52,8 +52,9 @@ def request(std, query, page = 1, size=40, filters = None):
     page -= 1
 
     clear_screen(std)
-    opts = {"output":"","text_color":246, "head_color":cGray, "merge":True}
-    ranges = {}
+    opts = {"output":"","text-color":246, "head-color":cGray, "merge":True}
+    ranges = {"text-color":[str(y) for y in range(255)]}
+
     ind = {}
     #if not query and task == "All":
     #    return "query is mandatory!"
@@ -122,9 +123,8 @@ def request(std, query, page = 1, size=40, filters = None):
     cgray = '\033[90m'
     begin_x = 10; begin_y = 1 
     height = 4; width = 80
-    title_win = cur.newwin(height, width, begin_y, begin_x)
-    text_win = cur.newwin(rows - 5, 80, 3, 5)
-    sect_win = cur.newwin(rows - 5, 20, 3, 0)
+    text_win = cur.newwin(rows - 5, cols - 5, 2, 5)
+    width = cols - 10
     # text_win = std
     if N == 0:
         return "No result fond!"
@@ -141,9 +141,9 @@ def request(std, query, page = 1, size=40, filters = None):
            sects_num = len(a["sections"])
            sc = max(sc, 0)
            sc = min(sc, sects_num)
-           title = "\n".join(textwrap.wrap(a["title"], 80)) # wrap at 60 characters
+           title = "\n".join(textwrap.wrap(a["title"], width)) # wrap at 60 characters
            top =  "["+str(k)+"] " + title
-           print_there(0, 0, top,  title_win, cC) 
+           mprint(top,  text_win, cC) 
            for b in a["sections"]:
                if sn != sc:
                    sect_title = b["title"]
@@ -171,13 +171,13 @@ def request(std, query, page = 1, size=40, filters = None):
                        mprint(sect_title, text_win, cW_cB)
                    else:
                        # print_there(sn,0, sect_title, sect_win, 10)
-                       mprint(sect_title, text_win, int(opts["head_color"]), True)
+                       mprint(sect_title, text_win, int(opts["head-color"]), True)
                    # mprint(frags_text, text_win, 4)
                    for fn, text in enumerate(sents):
                        if fn == fc:
-                          frag = "\n".join(textwrap.wrap(text, 76)) 
+                          frag = "\n".join(textwrap.wrap(text, width - 4))
                           frag =  textwrap.indent(frag, " "*2) 
-                          mprint(frag, text_win, int(opts["text_color"]))
+                          mprint(frag, text_win, int(opts["text-color"]))
                           # print_there(0,0, frag, text_win, 3)
 
 
@@ -187,14 +187,14 @@ def request(std, query, page = 1, size=40, filters = None):
                 i = start + j
                 paper_title =  a['title']
                 dots = ""
-                if len(paper_title) > 80:
+                if len(paper_title) > width - 10:
                    dots = "..."
-                item = "{}{} {}".format(i, ":", paper_title[:73] + dots)               
+                item = "{}{} {}".format(i, ":", paper_title[:width - 10] + dots)               
                 color = 0
                 if a["id"] in sels:
-                    color = clG
+                    color = cC
                 if i == k:
-                    color = clC
+                    color = cG
 
                 mprint(item, text_win, color)
 
@@ -224,33 +224,21 @@ def request(std, query, page = 1, size=40, filters = None):
         if ch == ord('p'):
             k-=1
         if ch == ord(":"):
-            cmd = minput(win_help, 0, 0, ":")
-            cmd = cmd.strip()
+            cmd = get_cmd(opts, ranges, ind, win_help)
             if len(cmd) == 1:
-                ch = cmd
-            cmd = cmd.split('=')
-            if len(cmd) > 1:
-                key = cmd[0].strip()
-                val = cmd[1].strip()
-                if key not in opts:
-                    show_err(key + " is an invalid option, press any key...", win_help)
-                else:
-                   mi = list(opts.keys()).index(key)
-                   if key not in ranges:
-                       opts[key] = val
-                   else:
-                        if val in ranges[key]:
-                            opts[key] = val
-                            ind[key] = ranges[key].index(val)
-                        else:
-                            show_err(val + " is invalid for " + key + ", press any key ...", win_help)
+                command = cmd[0].strip()
+                if len(command) == 1:
+                    ch = command
+                elif command != "set":
+                    show_err("Unknown command:" + command, win_help)
             else:
-                cmd = re.split(r'\s(?=")', cmd) 
-                if len(cmd) > 1:
-                    cmd = cmd[0].strip()
-                    arg = cmd[1].strip()
-                    if cmd == 'w':
-                        folder = arg
+                command = cmd[0].strip()
+                arg = cmd[1].strip()
+                if command == "w" or command == "write":
+                    folder = arg
+                    ch = ord("w")
+                elif command != "set":
+                    show_err("Unknown command:" + command, win_help)
         if ch == ord('n'):
             k+=1
         if ch == cur.KEY_RIGHT and mode == 'd': 
@@ -325,7 +313,7 @@ def request(std, query, page = 1, size=40, filters = None):
         if ch == ord('w') or ch == ord('m'):
             merge = ch == 'm'
             if not sels:
-                print_there(80,10,colored("No article selected!!",'red'), std)
+                show_err("No article was selected!! Select an article using s", win_help)
             else:
                 if merge:
                     f = open(folder + '.html', "w")
@@ -340,7 +328,7 @@ def request(std, query, page = 1, size=40, filters = None):
                         continue
                     num += 1
                     paper_title = a['title']
-                    print_there(80,10, paper_title + '...', std)
+                    show_info(paper_title + '...', win_help)
                     file_name = paper_title.replace(' ','_').lower()
                     if not merge:
                        f = open(folder + '/' + file_name + '.html', "w")
@@ -366,9 +354,41 @@ def request(std, query, page = 1, size=40, filters = None):
                 #for
                 if merge:
                     f.close()
-                print_there(80,10, str(num)+ " articles were downloaded and saved into:" + folder, std)
+                show_msg(str(num)+ " articles were downloaded and saved into:" + folder, win_help)
             ch = get_key(std)
     return "" 
+
+def get_cmd(opts, ranges, ind, win):
+    cmd = minput(win, 0, 0, ":")
+    # cmd = re.split(r'\s(?=")', cmd) 
+    cmd = shlex.split(cmd)
+    if len(cmd) == 1:
+        return cmd
+    
+    command = cmd[0].strip()
+    arg = cmd[1].strip()
+    if command != "set":
+        return cmd
+    else:
+        arg = arg.split('=')
+        if len(arg) == 1:
+            show_err("use 'set opt=val' to set an option, " + key + ", press any key ...", win)
+        else:
+            key = arg[0].strip()
+            val = arg[1].strip()
+            if key not in opts:
+                show_err(key + " is an invalid option, press any key...", win)
+            else:
+               mi = list(opts.keys()).index(key)
+               if key not in ranges:
+                   opts[key] = val
+               else:
+                    if val in ranges[key]:
+                        opts[key] = val
+                        ind[key] = ranges[key].index(val)
+                    else:
+                        show_err(val + " is invalid for " + key + ", press any key ...", win)
+        return cmd
 
 def refresh_menu(opts, menu_win, sel):
     global clG
@@ -388,50 +408,27 @@ def show_info(msg, win, color=cC):
     clear_screen(win)
     print_there(0,1, msg, win, color)
 
-def show_err(msg, win, color=cR):
+def show_msg(msg, win, color=cG):
    show_info(msg, win, color)
    win.getch()
    clear_screen(win)
 
-def main(std):
+def show_err(msg, win, color=cR):
+    show_msg(msg, win, color)
 
-    global cR, cG ,cY ,cB ,cPink ,cC ,clC ,clY ,cGray ,clGray ,clG , cllC ,cO, cW_cB
-    filters = {}
-    now = datetime.datetime.now()
-    filter_items = ["year", "conference", "dataset", "task"]
-    opts = {"query":"reading comprehension", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":""}
-    ranges = {
-            "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
-            "page":[str(y) for y in range(1,100)],
-            "page-size":[str(y) for y in range(30,100,10)], 
-            "task": ["All", "Reading Comprehension", "Machine Reading Comprehension","Sentiment Analysis", "Question Answering", "Transfer Learning","Natural Language Inference", "Computer Vision", "Machine Translation", "Text Classification", "Decision Making"],
-            "conference": ["All", "Arxiv", "ACL", "Workshops", "EMNLP", "IJCNLP", "NAACL", "LERC", "CL", "COLING", "BEA"],
-            "dataset": ["All","SQuAD", "RACE", "Social Media", "TriviaQA", "SNLI", "GLUE", "Image Net", "MS Marco", "TREC", "News QA" ]
-            }
-    ind = { "conference":0, "year":0, "page":0, "page-size":0, "task":0, "dataset":0 }
-
+def show_menu(std, opts, ranges, ind):
     mi = 0
-    ci = 0
-    confs = ["", "ACL","CLING","MSI","CLI"]
     ch = 'a'
     mode = 'm'
-    cur.start_color()
-    cur.use_default_colors()
-    for i in range(0, cur.COLORS):
-        cur.init_pair(i + 1, i, -1)
-    cur.init_pair(250, cur.COLOR_WHITE, cur.COLOR_BLUE)
 
-    menu_win = cur.newwin(10, 50, 3, 5)
-    sub_menu_win = cur.newwin(12,30,5,50)
     rows, cols = std.getmaxyx()
+    height = max(len(opts),rows-10)
+    width = cols//2 - 10
+    menu_win = cur.newwin(height, width, 3, 5)
+    sub_menu_win = cur.newwin(height, width,5, width + 5)
     win_help = cur.newwin(1, cols, rows-1,0) 
     hide_cursor()
     _help = False
-    for opt in opts:
-       if opt in ranges:
-           opts[opt] = ranges[opt][ind[opt]]
-    clear_screen(std)
-    print_there(2,0, "<< Nodreader V 1.0 >>".center(80))
     while ch != ord('q'):
         clear_screen(std)
         clear_screen(sub_menu_win)
@@ -469,27 +466,7 @@ def main(std):
         ch = get_key(std)
         
         if ch == ord(':'):
-            # show_cursor()
-            cmd = input(":")
-            hide_cursor()
-            cmd = cmd.split('=')
-            if len(cmd) == 1:
-                ch = cmd[0]
-            if len(cmd) > 1:
-                key = cmd[0].strip()
-                val = cmd[1].strip()
-                if key not in opts:
-                    err(key + "is an invalid option")
-                else:
-                   mi = list(opts.keys()).index(key)
-                   if key not in ranges:
-                       opts[key] = val
-                   else:
-                        if val in ranges[key]:
-                            opts[key] = val
-                            ind[key] = ranges[key].index(val)
-                        else:
-                            err(val + " is invalid for " + key)
+            cmd = get_cmd(opts, ranges, ind, win_help)
         if ch == ord("h"):
             _help = not _help
         if ch == cur.KEY_DOWN:
@@ -516,18 +493,50 @@ def main(std):
             # show_cursor()
             break;
         elif ch == ord('r') or ch == ord('g'): 
-            for k,v in opts.items():
-                if k in filter_items and v and v != "All":
-                    filters[k] = str(v)
-            clear_screen(std)
-            try:
-                ret = request(std, opts["query"], opts["page"], opts["page-size"], filters)
-                if ret:
-                    err(ret)
-            except KeyboardInterrupt:
-                # show_cursor()
-                ch = ord('q')
+            return ch
+    return ch
 
+def main(std):
+
+    global cR, cG ,cY ,cB ,cPink ,cC ,clC ,clY ,cGray ,clGray ,clG , cllC ,cO, cW_cB
+    filters = {}
+    now = datetime.datetime.now()
+    filter_items = ["year", "conference", "dataset", "task"]
+    opts = {"query":"reading comprehension", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":""}
+    ranges = {
+            "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
+            "page":[str(y) for y in range(1,100)],
+            "page-size":[str(y) for y in range(30,100,10)], 
+            "task": ["All", "Reading Comprehension", "Machine Reading Comprehension","Sentiment Analysis", "Question Answering", "Transfer Learning","Natural Language Inference", "Computer Vision", "Machine Translation", "Text Classification", "Decision Making"],
+            "conference": ["All", "Arxiv", "ACL", "Workshops", "EMNLP", "IJCNLP", "NAACL", "LERC", "CL", "COLING", "BEA"],
+            "dataset": ["All","SQuAD", "RACE", "Social Media", "TriviaQA", "SNLI", "GLUE", "Image Net", "MS Marco", "TREC", "News QA" ]
+            }
+    ind = { "conference":0, "year":0, "page":0, "page-size":0, "task":0, "dataset":0 }
+
+    for opt in opts:
+       if opt in ranges:
+           opts[opt] = ranges[opt][ind[opt]]
+    cur.start_color()
+    cur.use_default_colors()
+    for i in range(0, cur.COLORS):
+        cur.init_pair(i + 1, i, -1)
+    cur.init_pair(250, cur.COLOR_WHITE, cur.COLOR_BLUE)
+
+    clear_screen(std)
+    print_there(2,0, "<< Nodreader V 1.0 >>".center(80), std)
+
+    ch = show_menu(std, opts, ranges, ind)
+    if chr(ch) == 'r' or chr(ch) == 'g':
+        for k,v in opts.items():
+            if k in filter_items and v and v != "All":
+                filters[k] = str(v)
+        clear_screen(std)
+        try:
+            ret = request(std, opts["query"], opts["page"], opts["page-size"], filters)
+            if ret:
+                err(ret)
+        except KeyboardInterrupt:
+            show_cursor()
 
 if __name__ == "__main__":
     wrapper(main)
