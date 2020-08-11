@@ -74,11 +74,21 @@ def request(std, query, page = 1, size=40, filters = None):
     if opts is None:
         opts = {
                 "text-color":'246', 
-                "head-color": str(cGray)
+                "head-color": str(cGray),
+                "sel-head-color": str(clGray),
+                "sel-sect-color": '266',
+                "title-color":'300'
                 }
 
 
-    ranges = {"text-color":colors, "head-color": colors}
+    ranges = {
+            "text-color":colors,
+            "head-color":colors,
+            "sel-head-color":colors,
+            "sel-sect-color":colors,
+            "title-color":colors
+            }
+
 
     headers = {
         'Connection': 'keep-alive',
@@ -140,11 +150,6 @@ def request(std, query, page = 1, size=40, filters = None):
     mode = 'list'
     ls = True
     fast_read = False
-    cend = '\x1b[0m'
-    cend2 = '\033[0m'
-    cgray = '\033[90m'
-    begin_x = 10; begin_y = 1 
-    height = 4; width = 80
     text_win = cur.newwin(rows - 5, cols - 5, 2, 5)
     width = cols - 10
     # text_win = std
@@ -166,16 +171,16 @@ def request(std, query, page = 1, size=40, filters = None):
            sc = min(sc, sects_num)
            title = "\n".join(textwrap.wrap(a["title"], width)) # wrap at 60 characters
            top =  "["+str(k)+"] " + title
-           mprint(top,  text_win, cC) 
+           mprint(top,  text_win, int(opts["title-color"])) 
            for b in a["sections"]:
                if sn != sc:
                    sect_title = b["title"]
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        # print_there(sn,0, b["title"], sect_win, 7)
-                       mprint(sect_title, text_win, cW_cB, cur.A_BOLD)
+                       mprint("*" +sect_title, text_win, int(opts["sel-sect-color"]), cur.A_BOLD)
                    else:
                        # print_there(sn, 0, b["title"], sect_win, 10)
-                       mprint(sect_title, text_win, cGray, cur.A_BOLD)
+                       mprint(sect_title, text_win, int(opts["head-color"]), cur.A_BOLD)
                else:
                    frags_num = len(b['fragments'])
                    frags_text = ""
@@ -191,10 +196,10 @@ def request(std, query, page = 1, size=40, filters = None):
                    sect_title = b["title"] + f"({fc+1}/{frags_num})" 
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        # print_there(sn,0, sect_title, sect_win, 7)
-                       mprint(sect_title, text_win, cW_cB)
+                       mprint("*"+sect_title, text_win, int(opts["sel-sect-color"]))
                    else:
                        # print_there(sn,0, sect_title, sect_win, 10)
-                       mprint(sect_title, text_win, int(opts["head-color"]), True)
+                       mprint(sect_title, text_win, int(opts["sel-head-color"]), True)
                    # mprint(frags_text, text_win, 4)
                    for fn, text in enumerate(sents):
                        if fn == fc:
