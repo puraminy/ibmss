@@ -3,6 +3,7 @@ import requests
 from time import sleep
 import sys, os 
 import datetime
+import pickle
 import shlex
 import re
 import textwrap
@@ -12,6 +13,13 @@ import getch as gh
 from utility import *
 import curses as cur
 from curses import wrapper
+from pathlib import Path
+
+from appdirs import *
+appname = "NodReader"
+appauthor = "App"
+
+
 cW = 0
 cR = 2
 cG = 3
@@ -28,12 +36,23 @@ cllC = 82
 cO = 209
 cW_cB = 250
 
-def err(msg):
-    print("")
-    print(""+msg)
-    ch = get_key(std)
-    return ch
-def switch(d, art, ch):
+def save_obj(obj, name ):
+    folder = user_data_dir(appname, appauthor)
+    Path(folder).mkdir(parents=True, exist_ok=True)
+    fname = folder + '/' + name + '.pkl'
+    with open(folder + '/'+ name + '.pkl', 'wb') as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+def load_obj(name ):
+    folder = user_data_dir(appname, appauthor)
+    fname = folder + '/' + name + '.pkl'
+    obj_file = Path(fname) 
+    if not obj_file.is_file():
+        return None 
+    with open(fname, 'rb') as f:
+        return pickle.load(f)
+
+def toggle_in_list(d, art, ch):
     key = art["id"]
     sects = 'abstract introduction conclusion'
     if not key in d:
@@ -45,19 +64,19 @@ def switch(d, art, ch):
         del d[key]
 
 def request(std, query, page = 1, size=40, filters = None):
-    global cW, cR, cG ,cY ,cB ,cPink ,cC ,clC ,clY ,cGray ,clGray ,clG , cllC ,cO, cW_cB
      
-
     page = int(page)
     page -= 1
 
     clear_screen(std)
-    opts = {"output":"","text-color":246, "head-color":cGray, "merge":True}
+    opts = load_obj("art_opts")
+    if opts is None:
+        opts = {"output":"","text-color":246, "head-color":cGray, "merge":True}
     ranges = {"text-color":[str(y) for y in range(255)]}
+    inds = load_obj("art_inds")
+    if inds is None:
+        inds = {}
 
-    ind = {}
-    #if not query and task == "All":
-    #    return "query is mandatory!"
     headers = {
         'Connection': 'keep-alive',
         'Accept': 'application/json',
@@ -82,13 +101,13 @@ def request(std, query, page = 1, size=40, filters = None):
     try:
         response = requests.post('https://dimsum.eu-gb.containers.appdomain.cloud/api/scholar/search', headers=headers, data=data)
     except requests.exceptions.HTTPError as errh:
-        print ("Http Error:",errh)
+        show_err("Http Error:" + str(errh), std)
     except requests.exceptions.ConnectionError as errc:
-        print ("Error Connecting:",errc)
+        show_err("Error Connecting:" + str(errc), std)
     except requests.exceptions.Timeout as errt:
-        print ("Timeout Error:",errt)
+        show_err("Timeout Error:" + str(errt), std)
     except requests.exceptions.RequestException as err:
-        print ("OOps: Something Else",err)
+        show_err("OOps: Something Else" + str(err), std)
 
     clear_screen(std)
     conference = ''
@@ -128,9 +147,10 @@ def request(std, query, page = 1, size=40, filters = None):
     # text_win = std
     if N == 0:
         return "No result fond!"
-    while ch != ord('q') and ch != ord('g'):
+    while ch != ord('q'):
         clear_screen(text_win)
         k = max(k, 0)
+        k = min(k, len(articles) - 1)
         k = min(k, size-1)
         art = articles[k]
         art_id = art['id']
@@ -201,16 +221,17 @@ def request(std, query, page = 1, size=40, filters = None):
         #print(":", end="", flush=True)
         ch = get_key(std)
         if ch == ord('q') and mode == 'd':
+            ch = 0
             mode = 'list'
         if ch == ord('x'):
             fast_read = not fast_read
         if ch == ord('f') or ch == ord('s'):
-            switch(sels, art, ch)
+            toggle_in_list(sels, art, ch)
 
         if ch == ord('a'):
             for ss in range(start,start+15):
                   rr = articles[ss]
-                  switch(sels, rr, 's')
+                  toggle_in_list(sels, rr, 's')
 
         if ch == ord('c') and mode == 'd':
             cur_sect = art["sections"][sc]["title"].lower()
@@ -224,7 +245,10 @@ def request(std, query, page = 1, size=40, filters = None):
         if ch == ord('p'):
             k-=1
         if ch == ord(":"):
-            cmd = get_cmd(opts, ranges, ind, win_help)
+            cmd = get_cmd(opts, ranges, inds, win_help)
+            save_obj(opts, "art_opts")
+            save_obj(inds, "art_inds")
+            
             if len(cmd) == 1:
                 command = cmd[0].strip()
                 if len(command) == 1:
@@ -358,13 +382,15 @@ def request(std, query, page = 1, size=40, filters = None):
             ch = get_key(std)
     return "" 
 
-def get_cmd(opts, ranges, ind, win):
+def get_cmd(opts, ranges, inds, win):
     cmd = minput(win, 0, 0, ":")
     # cmd = re.split(r'\s(?=")', cmd) 
     cmd = shlex.split(cmd)
+    if len(cmd) == 0:
+        return ['<Enter>']
     if len(cmd) == 1:
         return cmd
-    
+ 
     command = cmd[0].strip()
     arg = cmd[1].strip()
     if command != "set":
@@ -372,7 +398,7 @@ def get_cmd(opts, ranges, ind, win):
     else:
         arg = arg.split('=')
         if len(arg) == 1:
-            show_err("use 'set opt=val' to set an option, " + key + ", press any key ...", win)
+            show_err("use 'set opt=val' to set an option, press any key ...", win)
         else:
             key = arg[0].strip()
             val = arg[1].strip()
@@ -385,7 +411,7 @@ def get_cmd(opts, ranges, ind, win):
                else:
                     if val in ranges[key]:
                         opts[key] = val
-                        ind[key] = ranges[key].index(val)
+                        inds[key] = ranges[key].index(val)
                     else:
                         show_err(val + " is invalid for " + key + ", press any key ...", win)
         return cmd
@@ -416,7 +442,8 @@ def show_msg(msg, win, color=cG):
 def show_err(msg, win, color=cR):
     show_msg(msg, win, color)
 
-def show_menu(std, opts, ranges, ind):
+def show_menu(std, opts, ranges, inds):
+
     mi = 0
     ch = 'a'
     mode = 'm'
@@ -434,7 +461,7 @@ def show_menu(std, opts, ranges, ind):
         clear_screen(sub_menu_win)
         sel,mi = get_sel(opts, mi)
         if sel in ranges:
-            opts[sel] = ranges[sel][ind[sel]]
+            opts[sel] = ranges[sel][inds[sel]]
 
         refresh_menu(opts, menu_win, sel)
         if mode == 's':
@@ -453,7 +480,7 @@ def show_menu(std, opts, ranges, ind):
                 count += 1
                 if count > 10:
                     break
-                if vi == ind[sel]:
+                if vi == inds[sel]:
                    mprint(str(v),sub_menu_win, cO)
                 else:
                    mprint(str(v), sub_menu_win, cC)
@@ -466,23 +493,23 @@ def show_menu(std, opts, ranges, ind):
         ch = get_key(std)
         
         if ch == ord(':'):
-            cmd = get_cmd(opts, ranges, ind, win_help)
+            cmd = get_cmd(opts, ranges, inds, win_help)
         if ch == ord("h"):
             _help = not _help
         if ch == cur.KEY_DOWN:
             if mode == "m":
                 mi += 1
             elif sel in ranges:
-                ind[sel] += 1
+                inds[sel] += 1
         if ch == cur.KEY_UP:
             if mode == "m":
                 mi -= 1
             elif sel in ranges:
-                ind[sel] -= 1
+                inds[sel] -= 1
 
         if sel in ranges:
-            ind[sel] = min(ind[sel], len(ranges[sel]))
-            ind[sel] = max(ind[sel], 0)
+            inds[sel] = min(inds[sel], len(ranges[sel]))
+            inds[sel] = max(inds[sel], 0)
         if  ch == cur.KEY_ENTER or ch == 10 or ch == 13:
             mode = 's' if mode == 'm' else 'm'
         if ch == cur.KEY_RIGHT:
@@ -498,11 +525,12 @@ def show_menu(std, opts, ranges, ind):
 
 def main(std):
 
-    global cR, cG ,cY ,cB ,cPink ,cC ,clC ,clY ,cGray ,clGray ,clG , cllC ,cO, cW_cB
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts = {"query":"reading comprehension", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":""}
+    opts = load_obj("query_opts")
+    if opts is None:
+        opts = {"query":"reading comprehension", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":""}
     ranges = {
             "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
             "page":[str(y) for y in range(1,100)],
@@ -511,11 +539,13 @@ def main(std):
             "conference": ["All", "Arxiv", "ACL", "Workshops", "EMNLP", "IJCNLP", "NAACL", "LERC", "CL", "COLING", "BEA"],
             "dataset": ["All","SQuAD", "RACE", "Social Media", "TriviaQA", "SNLI", "GLUE", "Image Net", "MS Marco", "TREC", "News QA" ]
             }
-    ind = { "conference":0, "year":0, "page":0, "page-size":0, "task":0, "dataset":0 }
+    inds = load_obj("query_inds")
+    if inds is None:
+        inds = { "conference":0, "year":0, "page":0, "page-size":0, "task":0, "dataset":0 }
 
     for opt in opts:
        if opt in ranges:
-           opts[opt] = ranges[opt][ind[opt]]
+           opts[opt] = ranges[opt][inds[opt]]
     cur.start_color()
     cur.use_default_colors()
     for i in range(0, cur.COLORS):
@@ -524,19 +554,23 @@ def main(std):
 
     clear_screen(std)
     print_there(2,0, "<< Nodreader V 1.0 >>".center(80), std)
-
-    ch = show_menu(std, opts, ranges, ind)
-    if chr(ch) == 'r' or chr(ch) == 'g':
-        for k,v in opts.items():
-            if k in filter_items and v and v != "All":
-                filters[k] = str(v)
-        clear_screen(std)
-        try:
-            ret = request(std, opts["query"], opts["page"], opts["page-size"], filters)
-            if ret:
-                err(ret)
-        except KeyboardInterrupt:
-            show_cursor()
+    ch = ord('a')
+    while ch != ord('q'):
+        ch = show_menu(std, opts, ranges, inds)
+        save_obj(opts, "query_opts")
+        save_obj(inds, "query_inds")
+        if chr(ch) == 'r' or chr(ch) == 'g':
+            for k,v in opts.items():
+                if k in filter_items and v and v != "All":
+                    filters[k] = str(v)
+            clear_screen(std)
+            try:
+                ret = request(std, opts["query"], opts["page"], opts["page-size"], filters)
+                if ret:
+                    show_err(ret, std)
+            except KeyboardInterrupt:
+                ch = ord('q')
+                show_cursor()
 
 if __name__ == "__main__":
     wrapper(main)
