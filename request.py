@@ -19,6 +19,9 @@ from appdirs import *
 appname = "NodReader"
 appauthor = "App"
 
+std = None
+theme_opts = {}
+theme_ranges = {}
 
 cW = 0
 cR = 2
@@ -63,37 +66,13 @@ def toggle_in_list(d, art, ch):
     else: 
         del d[key]
 
-def request(std, query, page = 1, size=40, filters = None):
+
+def request(query, page = 1, size=40, filters = None):
      
     page = int(page)
     page -= 1
 
     clear_screen(std)
-    opts = None #load_obj("art_opts")
-    colors = [str(y) for y in range(510)]
-    if opts is None:
-        opts = {
-                "preset":"",
-                "sep":"::",
-                "text-color":'246', 
-                "head-color": str(cGray),
-                "sel-head-color": str(clGray),
-                "sel-sect-color": '266',
-                "title-color":'300',
-                "sep":"",
-                "save as":""
-
-                }
-
-
-    ranges = {
-            "text-color":colors,
-            "head-color":colors,
-            "sel-head-color":colors,
-            "sel-sect-color":colors,
-            "title-color":colors
-            }
-
 
     headers = {
         'Connection': 'keep-alive',
@@ -114,18 +93,18 @@ def request(std, query, page = 1, size=40, filters = None):
 
     # print(data)
     rows, cols = std.getmaxyx()
-    win_help = cur.newwin(1, cols, rows-1,0) 
-    show_info("Getting articles...", win_help)
+    win_info = cur.newwin(1, cols, rows-1,0) 
+    show_info("Getting articles...")
     try:
         response = requests.post('https://dimsum.eu-gb.containers.appdomain.cloud/api/scholar/search', headers=headers, data=data)
     except requests.exceptions.HTTPError as errh:
-        show_err("Http Error:" + str(errh), std)
+        show_err("Http Error:" + str(errh))
     except requests.exceptions.ConnectionError as errc:
-        show_err("Error Connecting:" + str(errc), std)
+        show_err("Error Connecting:" + str(errc))
     except requests.exceptions.Timeout as errt:
-        show_err("Timeout Error:" + str(errt), std)
+        show_err("Timeout Error:" + str(errt))
     except requests.exceptions.RequestException as err:
-        show_err("OOps: Something Else" + str(err), std)
+        show_err("OOps: Something Else" + str(err))
 
     clear_screen(std)
     conference = ''
@@ -176,16 +155,16 @@ def request(std, query, page = 1, size=40, filters = None):
            sc = min(sc, sects_num)
            title = "\n".join(textwrap.wrap(a["title"], width)) # wrap at 60 characters
            top =  "["+str(k)+"] " + title
-           mprint(top,  text_win, int(opts["title-color"])) 
+           mprint(top,  text_win, int(theme_opts["title-color"])) 
            for b in a["sections"]:
                if sn != sc:
                    sect_title = b["title"]
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        # print_there(sn,0, b["title"], sect_win, 7)
-                       mprint("*" +sect_title, text_win, int(opts["sel-sect-color"]), cur.A_BOLD)
+                       mprint("*" +sect_title, text_win, int(theme_opts["sel-sect-color"]), cur.A_BOLD)
                    else:
                        # print_there(sn, 0, b["title"], sect_win, 10)
-                       mprint(sect_title, text_win, int(opts["head-color"]), cur.A_BOLD)
+                       mprint(sect_title, text_win, int(theme_opts["head-color"]), cur.A_BOLD)
                else:
                    frags_num = len(b['fragments'])
                    frags_text = ""
@@ -201,16 +180,16 @@ def request(std, query, page = 1, size=40, filters = None):
                    sect_title = b["title"] + f"({fc+1}/{frags_num})" 
                    if art_id in sels and b["title"].lower() in sels[art_id]:
                        # print_there(sn,0, sect_title, sect_win, 7)
-                       mprint("*"+sect_title, text_win, int(opts["sel-sect-color"]))
+                       mprint("*"+sect_title, text_win, int(theme_opts["sel-sect-color"]))
                    else:
                        # print_there(sn,0, sect_title, sect_win, 10)
-                       mprint(sect_title, text_win, int(opts["sel-head-color"]), True)
+                       mprint(sect_title, text_win, int(theme_opts["sel-head-color"]), True)
                    # mprint(frags_text, text_win, 4)
                    for fn, text in enumerate(sents):
                        if fn == fc:
                           frag = "\n".join(textwrap.wrap(text, width - 4))
                           frag =  textwrap.indent(frag, " "*2) 
-                          mprint(frag, text_win, int(opts["text-color"]))
+                          mprint(frag, text_win, int(theme_opts["text-color"]))
                           # print_there(0,0, frag, text_win, 3)
 
 
@@ -258,18 +237,14 @@ def request(std, query, page = 1, size=40, filters = None):
         if ch == ord('p'):
             k-=1
         if ch == ord(":"):
-            cmd = get_cmd(opts, ranges, win_help)
-            save_obj(opts, "art_opts")
+            cmd = get_cmd(win_info)
             
             if len(cmd) == 1:
                 command = cmd[0].strip()
                 if len(command) == 1:
                     ch = command
-                elif command == "set":
-                    show_menu(std, opts, ranges)
-                    save_obj(opts, "art_opts")
-                else:
-                    show_err("Unknown command:" + command, win_help)
+                elif command != "set":
+                    show_err("Unknown command:" + command)
             else:
                 command = cmd[0].strip()
                 arg = cmd[1].strip()
@@ -277,7 +252,7 @@ def request(std, query, page = 1, size=40, filters = None):
                     folder = arg
                     ch = ord("w")
                 elif command != "set":
-                    show_err("Unknown command:" + command, win_help)
+                    show_err("Unknown command:" + command)
         if ch == ord('n'):
             k+=1
         if ch == cur.KEY_RIGHT and mode == 'd': 
@@ -352,7 +327,7 @@ def request(std, query, page = 1, size=40, filters = None):
         if ch == ord('w') or ch == ord('m'):
             merge = ch == 'm'
             if not sels:
-                show_err("No article was selected!! Select an article using s", win_help)
+                show_err("No article was selected!! Select an article using s")
             else:
                 if merge:
                     f = open(folder + '.html', "w")
@@ -367,7 +342,7 @@ def request(std, query, page = 1, size=40, filters = None):
                         continue
                     num += 1
                     paper_title = a['title']
-                    show_info(paper_title + '...', win_help)
+                    show_info(paper_title + '...')
                     file_name = paper_title.replace(' ','_').lower()
                     if not merge:
                        f = open(folder + '/' + file_name + '.html', "w")
@@ -393,42 +368,51 @@ def request(std, query, page = 1, size=40, filters = None):
                 #for
                 if merge:
                     f.close()
-                show_msg(str(num)+ " articles were downloaded and saved into:" + folder, win_help)
+                show_msg(str(num)+ " articles were downloaded and saved into:" + folder)
             ch = get_key(std)
     return "" 
 
-def get_cmd(opts, ranges, win):
+def get_cmd(win):
+    global theme_opts, theme_ranges
     cmd = minput(win, 0, 0, ":")
     # cmd = re.split(r'\s(?=")', cmd) 
     cmd = shlex.split(cmd)
     if len(cmd) == 0:
         return ['<Enter>']
     if len(cmd) == 1:
-        return cmd
+        command = cmd[0]
+        if command == "set":
+            show_menu(theme_opts, theme_ranges, "::Settings")
+            return cmd
+        else:
+            return cmd
  
     command = cmd[0].strip()
     arg = cmd[1].strip()
     if command != "set":
         return cmd
     else:
-        arg = arg.split('=')
-        if len(arg) == 1:
-            show_err("use 'set opt=val' to set an option, press any key ...", win)
-        else:
-            key = arg[0].strip()
-            val = arg[1].strip()
-            if key not in opts:
-                show_err(key + " is an invalid option, press any key...", win)
-            else:
-               mi = list(opts.keys()).index(key)
-               if key not in ranges:
-                   opts[key] = val
-               else:
-                    if val in ranges[key]:
-                        opts[key] = val
-                    else:
-                        show_err(val + " is invalid for " + key + ", press any key ...", win)
+        apply_settings(arg, theme_opts, theme_ranges, win)
         return cmd
+
+def apply_settings(arg, opts, ranges, win):
+    arg = arg.split('=')
+    if len(arg) == 1:
+        show_err("use 'set opt=val' to set an option, press any key ...")
+    else:
+        key = arg[0].strip()
+        val = arg[1].strip()
+        if key not in opts:
+            show_err(key + " is an invalid option, press any key...")
+        else:
+           mi = list(opts.keys()).index(key)
+           if key not in ranges:
+               opts[key] = val
+           else:
+                if val in ranges[key]:
+                    opts[key] = val
+                else:
+                    show_err(val + " is invalid for " + key + ", press any key ...")
 
 def refresh_menu(opts, menu_win, sel):
     global clG
@@ -458,35 +442,40 @@ def get_sel(opts, mi):
     mi = min(mi, len(opts)-1)
     return list(opts)[mi], mi
 
-def show_info(msg, win, color=cC):
+def show_info(msg, color=501):
+    rows, cols = std.getmaxyx()
+    win = cur.newwin(1, cols, rows-1,0) 
     clear_screen(win)
     print_there(0,1, msg, win, color)
 
-def show_msg(msg, win, color=cG):
-   show_info(msg, win, color)
+def show_msg(msg, color=cG):
+   show_info(msg, color)
    win.getch()
-   clear_screen(win)
+   clear_screen(std)
 
-def show_err(msg, win, color=266):
-    show_msg(msg, win, color)
+def show_err(msg, color=266):
+    show_msg(msg, color)
 
-def show_menu(std, opts, ranges):
-
+def show_menu(opts, ranges, title = "::NodReader v1.0"):
     mi = 0
     si = 0
     ch = 'a'
     mode = 'm'
 
     rows, cols = std.getmaxyx()
-    height = max(len(opts),rows-10)
-    width = cols//2 - 10
+    height = rows - 5
+    width = cols - 10
+    main_win = cur.newwin(rows -1, cols, 0, 0)
+
+    clear_screen(main_win)
     menu_win = cur.newwin(height, width, 3, 5)
-    sub_menu_win = cur.newwin(height, width,5, width + 5)
-    win_help = cur.newwin(1, cols, rows-1,0) 
+    sub_menu_win = menu_win.subwin(5, width//2 + 5)
+    win_info = cur.newwin(1, cols, rows-1, 0) 
+
+    print_there(1, 0, title.center(80), std)
     hide_cursor()
     _help = False
     while ch != ord('q'):
-        clear_screen(std)
         clear_screen(sub_menu_win)
         sel,mi = get_sel(opts, mi)
         refresh_menu(opts, menu_win, sel)
@@ -522,14 +511,20 @@ def show_menu(std, opts, ranges):
                   mprint("...", sub_menu_win, cW)
 
         if _help:
+            _help = False
             if mode == 'm':
-                show_info("Press <Enter> to set a value, r to search and q to quit.", win_help)
+                clear_screen(menu_win)
+                mprint("Press <Enter> to set a value, r to search and q to quit.", menu_win)
+                a = std.getch()
+                refresh_menu(opts, menu_win, sel)
+                ch = 'a'
             else:
-                show_info("Press <Enter> to set a value", win_help)
+                show_info("Press <Enter> to set a value")
         ch = get_key(std)
         
         if ch == ord(':'):
-            cmd = get_cmd(opts, ranges, win_help)
+            cmd = get_cmd(win_info)
+            
         if ch == ord("h"):
             _help = not _help
         if ch == cur.KEY_DOWN:
@@ -565,6 +560,12 @@ def show_menu(std, opts, ranges):
                     si = ranges[sel].index(opts[sel])
             elif mode == 's':
                 opts[sel] = ranges[sel][si]
+                if sel == "preset":
+                    tmp_opts = load_obj(opts["preset"])
+                    if tmp_opts != None:
+                        opts = tmp_opts
+                        refresh_menu(opts, menu_win, sel)
+                        show_info(opts[sel] +  " was loaded")
                 mode = 'm'    
                 si = 0
         if ch == cur.KEY_RIGHT:
@@ -579,18 +580,25 @@ def show_menu(std, opts, ranges):
         elif ch == ord('q'):
             # show_cursor()
             break;
+        elif ch == ord('s') and "preset" in opts:
+            save_obj(opts, opts["preset"])
+            show_info(opts["preset"] +  " was saved")
         elif ch == ord('r') or ch == ord('g'): 
             return ch
     return ch
 
-def main(std):
+def main(stdscr):
+
+    global theme_ranges, theme_opts, std
+
+    std = stdscr
 
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts = None #load_obj("query_opts")
+    opts = load_obj("query_opts")
     if opts is None:
-        opts = {"search":"reading comprehension", "sep":":", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":""}
+        opts = {"search":"reading comprehension", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":""}
     ranges = {
             "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
             "page":[str(y) for y in range(1,100)],
@@ -613,11 +621,36 @@ def main(std):
         cur.init_pair(c, i, 0)
         c += 1
 
+
+    theme_opts = None # load_obj("art_opts")
+    colors = [str(y) for y in range(510)]
+    if theme_opts is None:
+        theme_opts = {
+                "preset":"preset1",
+                "text-color":'246', 
+                "head-color": str(cGray),
+                "sel-head-color": str(clGray),
+                "sel-sect-color": '266',
+                "title-color":'300',
+                }
+
+
+    theme_ranges = {
+            "preset":["preset1", "preset2", "preset3"],
+            "text-color":colors,
+            "head-color":colors,
+            "sel-head-color":colors,
+            "sel-sect-color":colors,
+            "title-color":colors
+            }
+
+
+
     clear_screen(std)
-    print_there(2,0, "<< Nodreader V 1.0 >>".center(80), std)
     ch = ord('a')
     while ch != ord('q'):
-        ch = show_menu(std, opts, ranges)
+        show_info("q) quit    r) search   h) help")
+        ch = show_menu(opts, ranges)
         save_obj(opts, "query_opts")
         if chr(ch) == 'r' or chr(ch) == 'g':
             for k,v in opts.items():
@@ -625,9 +658,9 @@ def main(std):
                     filters[k] = str(v)
             clear_screen(std)
             try:
-                ret = request(std, opts["search"], opts["page"], opts["page-size"], filters)
+                ret = request(opts["search"], opts["page"], opts["page-size"], filters)
                 if ret:
-                    show_err(ret, std)
+                    show_err(ret)
             except KeyboardInterrupt:
                 ch = ord('q')
                 show_cursor()
