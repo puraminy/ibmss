@@ -45,8 +45,8 @@ def mprint(text, stdscr =None, color=0, attr = None, end="\n"):
         if attr is not None:
             c = cur.color_pair(color) | attr
         height, width = stdscr.getmaxyx()
-        stdscr.addnstr(text + end, height*width-1, c)
-        # stdscr.addstr(text + end, c)
+        #stdscr.addnstr(text + end, height*width-1, c)
+        stdscr.addstr(text + end, c)
         stdscr.refresh()
 
 def print_there(x, y, text, stdscr = None, color=0, attr = None):
@@ -55,8 +55,8 @@ def print_there(x, y, text, stdscr = None, color=0, attr = None):
         if attr is not None:
             c = cur.color_pair(color) | cur.A_BOLD
         height, width = stdscr.getmaxyx()
-        stdscr.addnstr(x, y, text, height*width-1, c)
-        #stdscr.addstr(x, y, text, c)
+        #stdscr.addnstr(x, y, text, height*width-1, c)
+        stdscr.addstr(x, y, text, c)
         stdscr.refresh()
     else:
         sys.stdout.write("\x1b7\x1b[%d;%df%s\x1b8" % (x, y, text))
