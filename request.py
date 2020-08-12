@@ -98,13 +98,13 @@ def request(query, page = 1, size=40, filters = None):
     try:
         response = requests.post('https://dimsum.eu-gb.containers.appdomain.cloud/api/scholar/search', headers=headers, data=data)
     except requests.exceptions.HTTPError as errh:
-        show_err("Http Error:" + str(errh))
+        return ("Http Error:" + str(errh))
     except requests.exceptions.ConnectionError as errc:
-        show_err("Error Connecting:" + str(errc))
+        return ("Error Connecting:" + str(errc))
     except requests.exceptions.Timeout as errt:
-        show_err("Timeout Error:" + str(errt))
+        return ("Timeout Error:" + str(errt))
     except requests.exceptions.RequestException as err:
-        show_err("OOps: Something Else" + str(err))
+        return ("OOps: Something Else" + str(err))
 
     clear_screen(std)
     conference = ''
@@ -141,6 +141,7 @@ def request(query, page = 1, size=40, filters = None):
         return "No result fond!"
     while ch != ord('q'):
         clear_screen(text_win)
+        text_win.bkgd(' ', cur.color_pair(int(theme_opts["background-color"])))
         k = max(k, 0)
         k = min(k, len(articles) - 1)
         k = min(k, size-1)
@@ -202,9 +203,9 @@ def request(query, page = 1, size=40, filters = None):
                 if len(paper_title) > width - 10:
                    dots = "..."
                 item = "{}{} {}".format(i, ":", paper_title[:width - 10] + dots)               
-                color = 0
+                color = int(theme_opts["text-color"])
                 if a["id"] in sels:
-                    color = cC
+                    color = int(theme_opts["sel-sect-color"])
                 if i == k:
                     color = cG
 
@@ -628,6 +629,7 @@ def main(stdscr):
         theme_opts = {
                 "preset":"preset1",
                 "text-color":'246', 
+                "background-color":'310',
                 "head-color": str(cGray),
                 "sel-head-color": str(clGray),
                 "sel-sect-color": '266',
@@ -638,10 +640,11 @@ def main(stdscr):
     theme_ranges = {
             "preset":["preset1", "preset2", "preset3"],
             "text-color":colors,
+            "background-color":colors,
             "head-color":colors,
             "sel-head-color":colors,
             "sel-sect-color":colors,
-            "title-color":colors
+            "title-color":colors,
             }
 
 
@@ -660,7 +663,9 @@ def main(stdscr):
             try:
                 ret = request(opts["search"], opts["page"], opts["page-size"], filters)
                 if ret:
-                    show_err(ret)
+                    mprint(ret, std)
+                    std.getch()
+
             except KeyboardInterrupt:
                 ch = ord('q')
                 show_cursor()
