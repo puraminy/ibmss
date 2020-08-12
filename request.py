@@ -69,15 +69,20 @@ def request(std, query, page = 1, size=40, filters = None):
     page -= 1
 
     clear_screen(std)
-    opts = load_obj("art_opts")
+    opts = None #load_obj("art_opts")
     colors = [str(y) for y in range(510)]
     if opts is None:
         opts = {
+                "preset":"",
+                "sep":"::",
                 "text-color":'246', 
                 "head-color": str(cGray),
                 "sel-head-color": str(clGray),
                 "sel-sect-color": '266',
-                "title-color":'300'
+                "title-color":'300',
+                "sep":"",
+                "save as":""
+
                 }
 
 
@@ -431,13 +436,19 @@ def refresh_menu(opts, menu_win, sel):
     row = 0
     for k, v in opts.items():
        if k == sel:
-           print_there(row, 0, "{:<15}> ".format(k), menu_win, cO)
+           if k == "sep":
+               print_there(row, 0,  str(v) + ":", menu_win, cO)
+           else:
+               print_there(row, 0, "{:<15}> ".format(k), menu_win, cO)
        else:
-           print_there(row, 0, "{:<15}: ".format(k), menu_win, cB)
+           if k == "sep":
+               print_there(row, 0,  str(v) + ":", menu_win, cG)
+           else:
+               print_there(row, 0, "{:<15}: ".format(k), menu_win, cB)
 
-       if "color" in sel:
-           print_there(row, 17, "{}".format(str(v) + " SSSS"), menu_win, int(v), cur.A_UNDERLINE) 
-       else:
+       if "color" in k:
+           print_there(row, 17, "{}".format(str(v)), menu_win, int(v), cur.A_UNDERLINE) 
+       elif k != "sep":
            print_there(row, 17, "{}".format(v), menu_win, cW)
 
        row += 1
@@ -546,7 +557,9 @@ def show_menu(std, opts, ranges):
             si = min(si, len(ranges[sel]) - 1)
             si = max(si, 0)
         if  ch == cur.KEY_ENTER or ch == 10 or ch == 13:
-            if mode == 'm':
+            if sel == "sep":
+                mi += 1
+            elif mode == 'm':
                 mode = 's'
                 if sel in ranges:
                     si = ranges[sel].index(opts[sel])
@@ -555,9 +568,12 @@ def show_menu(std, opts, ranges):
                 mode = 'm'    
                 si = 0
         if ch == cur.KEY_RIGHT:
-            mode = 's'
-            if sel in ranges:
-                si = ranges[sel].index(opts[sel])
+            if sel == "sep":
+                mi += 1
+            else:
+                mode = 's'
+                if sel in ranges:
+                    si = ranges[sel].index(opts[sel])
         elif ch == cur.KEY_LEFT:
             mode = 'm'
         elif ch == ord('q'):
@@ -572,9 +588,9 @@ def main(std):
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts = load_obj("query_opts")
+    opts = None #load_obj("query_opts")
     if opts is None:
-        opts = {"query":"reading comprehension", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":""}
+        opts = {"search":"reading comprehension", "sep":":", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":""}
     ranges = {
             "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
             "page":[str(y) for y in range(1,100)],
@@ -609,7 +625,7 @@ def main(std):
                     filters[k] = str(v)
             clear_screen(std)
             try:
-                ret = request(std, opts["query"], opts["page"], opts["page-size"], filters)
+                ret = request(std, opts["search"], opts["page"], opts["page-size"], filters)
                 if ret:
                     show_err(ret, std)
             except KeyboardInterrupt:
