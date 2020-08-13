@@ -1,5 +1,6 @@
 #v2 tehran
 import requests
+import datetime, time
 from time import sleep
 import sys, os 
 import datetime
@@ -16,12 +17,17 @@ from curses import wrapper
 from pathlib import Path
 
 from appdirs import *
+import platform
+
+from pdf2text import *
+
 appname = "NodReader"
 appauthor = "App"
 
 std = None
 theme_opts = {}
 theme_ranges = {}
+conf = {}
 
 cW = 0
 cR = 2
@@ -39,15 +45,21 @@ cllC = 82
 cO = 209
 cW_cB = 250
 
-def save_obj(obj, name ):
-    folder = user_data_dir(appname, appauthor)
+def save_obj(obj, name, directory):
+    if directory != "":
+        folder = user_data_dir(appname, appauthor) + "/" + directory
+    else:
+        folder = user_data_dir(appname, appauthor)
     Path(folder).mkdir(parents=True, exist_ok=True)
     fname = folder + '/' + name + '.pkl'
     with open(folder + '/'+ name + '.pkl', 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
-def load_obj(name ):
-    folder = user_data_dir(appname, appauthor)
+def load_obj(name, directory):
+    if directory != "":
+        folder = user_data_dir(appname, appauthor) + "/" + directory
+    else:
+        folder = user_data_dir(appname, appauthor)
     fname = folder + '/' + name + '.pkl'
     obj_file = Path(fname) 
     if not obj_file.is_file():
@@ -55,8 +67,9 @@ def load_obj(name ):
     with open(fname, 'rb') as f:
         return pickle.load(f)
 
+# Add or remove an item from the list of selected sections of articles
 def toggle_in_list(d, art, ch):
-    key = art["id"]
+    key = art["id"] # article id
     sects = 'abstract introduction conclusion'
     if not key in d:
         if ch == ord('s'):
@@ -71,8 +84,6 @@ def request(query, page = 1, size=40, filters = None):
      
     page = int(page)
     page -= 1
-
-    clear_screen(std)
 
     headers = {
         'Connection': 'keep-alive',
@@ -92,9 +103,6 @@ def request(query, page = 1, size=40, filters = None):
     #data ='{"query":"reading comprehension","filters":{},"page":0,"size":30,"sort":null,"sessionInfo":""}'
 
     # print(data)
-    rows, cols = std.getmaxyx()
-    win_info = cur.newwin(1, cols, rows-1,0) 
-    show_info("Getting articles...")
     try:
         response = requests.post('https://dimsum.eu-gb.containers.appdomain.cloud/api/scholar/search', headers=headers, data=data)
     except requests.exceptions.HTTPError as errh:
@@ -106,7 +114,7 @@ def request(query, page = 1, size=40, filters = None):
     except requests.exceptions.RequestException as err:
         return ("OOps: Something Else" + str(err))
 
-    clear_screen(std)
+    articles = response.json()['searchResults']['results']
     conference = ''
     if "conference" in filters:
         conference = filters['conference']
@@ -119,12 +127,18 @@ def request(query, page = 1, size=40, filters = None):
     year = ''
     if "year" in filters:
         year = filters['year']
-    folder = query + '_' + str(year) + '_' + str(page) + '_' + conference + '_' + task + '_' + dataset
-    folder = folder.replace(' ','_')
-    folder = folder.replace('__','_')
-    folder = folder.replace('__','_')
+    fid = query + '_' + str(year) + '_' + str(page) + '_' + conference + '_' + task + '_' + dataset
+    fid = fid.replace(' ','_')
+    fid = fid.replace('__','_')
+    fid = fid.replace('__','_')
 
-    articles = response.json()['searchResults']['results']
+    save_obj(articles, "last_results", "")
+
+    return show_results(articles, fid)
+
+def show_results(articles, fid):
+    clear_screen(std)
+    rows, cols = std.getmaxyx()
     ch = ''
     sels = {}
     start = 0
@@ -135,21 +149,28 @@ def request(query, page = 1, size=40, filters = None):
     ls = True
     fast_read = False
     text_win = cur.newwin(rows - 5, cols - 5, 2, 5)
+    main_win = cur.newwin(rows -1, cols, 0, 0)
+    mprint(str(articles[0]))
     width = cols - 10
     # text_win = std
     if N == 0:
         return "No result fond!"
+    bg = ""
     while ch != ord('q'):
-        clear_screen(text_win)
         text_win.bkgd(' ', cur.color_pair(int(theme_opts["background-color"])))
+        main_win.bkgd(' ', cur.color_pair(int(theme_opts["background-color"])))
+        clear_screen(text_win)
+        if bg != theme_opts["background-color"]:
+            bg = theme_opts["background-color"]
+            clear_screen(main_win)
         k = max(k, 0)
         k = min(k, len(articles) - 1)
-        k = min(k, size-1)
+        k = min(k, N-1)
         art = articles[k]
         art_id = art['id']
         if mode == 'd':
            a = art
-           clear_screen(std)
+           clear_screen(text_win)
            sn = 0
            sects_num = len(a["sections"])
            sc = max(sc, 0)
@@ -213,6 +234,23 @@ def request(query, page = 1, size=40, filters = None):
 
         #print(":", end="", flush=True)
         ch = get_key(std)
+        clear_screen(win_info)
+        if ch == ord('z'):
+            if not sels:
+                show_err("No article was selected")
+            else:
+                sel_arts = []
+                count = 0
+
+                for a in articles:
+                    count += 1
+                    if a["id"] in sels:
+                        fid += str(count)
+                        sel_arts.append(a)
+                save_obj(sel_arts, fid, "articles")
+                articles = sel_arts
+                show_info("Selected articles were saved as " + fid)
+
         if ch == ord('q') and mode == 'd':
             ch = 0
             mode = 'list'
@@ -238,7 +276,7 @@ def request(query, page = 1, size=40, filters = None):
         if ch == ord('p'):
             k-=1
         if ch == ord(":"):
-            cmd = get_cmd(win_info)
+            cmd = get_cmd()
             
             if len(cmd) == 1:
                 command = cmd[0].strip()
@@ -250,7 +288,7 @@ def request(query, page = 1, size=40, filters = None):
                 command = cmd[0].strip()
                 arg = cmd[1].strip()
                 if command == "w" or command == "write":
-                    folder = arg
+                    fid = arg
                     ch = ord("w")
                 elif command != "set":
                     show_err("Unknown command:" + command)
@@ -331,10 +369,10 @@ def request(query, page = 1, size=40, filters = None):
                 show_err("No article was selected!! Select an article using s")
             else:
                 if merge:
-                    f = open(folder + '.html', "w")
+                    f = open(fid + '.html', "w")
                     print("<!DOCTYPE html>\n<html>\n<body>", file=f)
-                elif not os.path.exists(folder):
-                    os.makedirs(folder)
+                elif not os.path.exists(fid):
+                    os.makedirs(fid)
                 num = 0
                 for j,a in enumerate(articles): 
                     i = start + j
@@ -346,7 +384,7 @@ def request(query, page = 1, size=40, filters = None):
                     show_info(paper_title + '...')
                     file_name = paper_title.replace(' ','_').lower()
                     if not merge:
-                       f = open(folder + '/' + file_name + '.html', "w")
+                       f = open(fid + '/' + file_name + '.html', "w")
                        print("<!DOCTYPE html>\n<html>\n<body>", file=f)
                     print("<h1>" +  "New Paper" + "</h1>", file=f)
                     print("<h1>" +  paper_title + "</h1>", file=f)
@@ -369,12 +407,15 @@ def request(query, page = 1, size=40, filters = None):
                 #for
                 if merge:
                     f.close()
-                show_msg(str(num)+ " articles were downloaded and saved into:" + folder)
+                show_msg(str(num)+ " articles were downloaded and saved into:" + fid)
             ch = get_key(std)
     return "" 
 
-def get_cmd(win):
+def get_cmd():
+
     global theme_opts, theme_ranges
+    rows, cols = std.getmaxyx()
+    win = cur.newwin(1, cols, rows-1, 0) 
     cmd = minput(win, 0, 0, ":")
     # cmd = re.split(r'\s(?=")', cmd) 
     cmd = shlex.split(cmd)
@@ -383,7 +424,8 @@ def get_cmd(win):
     if len(cmd) == 1:
         command = cmd[0]
         if command == "set":
-            show_menu(theme_opts, theme_ranges, "::Settings")
+            _, theme_opts = show_menu(theme_opts, theme_ranges, "::Settings")
+            save_obj(theme_opts, conf["theme"], "themes")
             return cmd
         else:
             return cmd
@@ -443,21 +485,21 @@ def get_sel(opts, mi):
     mi = min(mi, len(opts)-1)
     return list(opts)[mi], mi
 
+win_info = None
 def show_info(msg, color=501):
+    global win_info
     rows, cols = std.getmaxyx()
-    win = cur.newwin(1, cols, rows-1,0) 
-    clear_screen(win)
-    print_there(0,1, msg, win, color)
+    win_info = cur.newwin(1, cols, rows-1,0) 
+    clear_screen(win_info)
+    print_there(0,1, msg, win_info, color)
 
 def show_msg(msg, color=cG):
    show_info(msg, color)
-   win.getch()
-   clear_screen(std)
 
 def show_err(msg, color=266):
     show_msg(msg, color)
 
-def show_menu(opts, ranges, title = "::NodReader v1.0"):
+def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = ""):
     mi = 0
     si = 0
     ch = 'a'
@@ -471,13 +513,15 @@ def show_menu(opts, ranges, title = "::NodReader v1.0"):
     clear_screen(main_win)
     menu_win = cur.newwin(height, width, 3, 5)
     sub_menu_win = menu_win.subwin(5, width//2 + 5)
-    win_info = cur.newwin(1, cols, rows-1, 0) 
 
     print_there(1, 0, title.center(80), std)
     hide_cursor()
     _help = False
+    last_preset = conf["theme"]
     while ch != ord('q'):
         clear_screen(sub_menu_win)
+        if info != "":
+            show_info(info)
         sel,mi = get_sel(opts, mi)
         refresh_menu(opts, menu_win, sel)
         if mode == 's':
@@ -513,18 +557,25 @@ def show_menu(opts, ranges, title = "::NodReader v1.0"):
 
         if _help:
             _help = False
-            if mode == 'm':
-                clear_screen(menu_win)
-                mprint("Press <Enter> to set a value, r to search and q to quit.", menu_win)
-                a = std.getch()
-                refresh_menu(opts, menu_win, sel)
-                ch = 'a'
+            clear_screen(menu_win)
+            fname = "ReadMe.md"
+            obj_file = Path(fname) 
+            if not obj_file.is_file():
+                cont = "ReadMe is missing! please refer to the project address on github..."
             else:
-                show_info("Press <Enter> to set a value")
+                with open("ReadMe.md", "r") as f:
+                    cont = f.read()
+            mprint(cont, menu_win)
+            show_info("Press any key to return ...")
+            a = std.getch()
+            refresh_menu(opts, menu_win, sel)
+            if info != "":
+                show_info(info)
+            ch = 'a'
         ch = get_key(std)
         
         if ch == ord(':'):
-            cmd = get_cmd(win_info)
+            cmd = get_cmd()
             
         if ch == ord("h"):
             _help = not _help
@@ -561,12 +612,27 @@ def show_menu(opts, ranges, title = "::NodReader v1.0"):
                     si = ranges[sel].index(opts[sel])
             elif mode == 's':
                 opts[sel] = ranges[sel][si]
-                if sel == "preset":
-                    tmp_opts = load_obj(opts["preset"])
+                if sel == "pdf files":
+                    ch = ord('p')
+                    return ch, opts
+                elif sel == "saved articles":
+                    ch = ord('o')
+                    return ch, opts
+                elif sel == "preset":
+                    save_obj(opts, last_preset, "themes")
+                    new_preset = ranges[sel][si]
+                    tmp_opts = load_obj(new_preset,"themes")
                     if tmp_opts != None:
                         opts = tmp_opts
+                        opts["preset"] = new_preset
+                        last_preset = new_preset
+                        conf["theme"] = new_preset
+                        save_obj(conf, "conf", "")
                         refresh_menu(opts, menu_win, sel)
-                        show_info(opts[sel] +  " was loaded")
+                        show_info(new_preset +  " was loaded")
+                    else:
+                        show_err("The file is missing")
+
                 mode = 'm'    
                 si = 0
         if ch == cur.KEY_RIGHT:
@@ -578,37 +644,70 @@ def show_menu(opts, ranges, title = "::NodReader v1.0"):
                     si = ranges[sel].index(opts[sel])
         elif ch == cur.KEY_LEFT:
             mode = 'm'
-        elif ch == ord('q'):
+        if ch == ord('q'):
             # show_cursor()
             break;
-        elif ch == ord('s') and "preset" in opts:
-            save_obj(opts, opts["preset"])
-            show_info(opts["preset"] +  " was saved")
-        elif ch == ord('r') or ch == ord('g'): 
-            return ch
-    return ch
+        if ch == ord('s') and "preset" in opts:
+            fname = minput(win_info, 0, 0, "Save as:") 
+            save_obj(opts, fname, "themes")
+            show_info(opts["preset"] +  " was saved as " + fname)
+            opts["preset"] = fname
+            refresh_menu(opts, menu_win, sel)
+        elif chr(ch) in shortkeys:
+            mi = list(opts.keys()).index(shortkeys[chr(ch)])
+            mode = 's'
+        elif ch == ord('r') or ch == ord('l'): 
+            return ch, opts
+    return ch, opts
+
 
 def main(stdscr):
 
-    global theme_ranges, theme_opts, std
+    global theme_ranges, theme_opts, std, conf
 
     std = stdscr
 
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts = load_obj("query_opts")
+    opts = None # load_obj("query_opts")
     if opts is None:
-        opts = {"search":"reading comprehension", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":""}
+        opts = {"search":"reading comprehension", "year":"","page":1,"page-size":30,"task":"", "conference":"", "dataset":"", "sep":"","last results":"", "saved articles":"","sep":"", "pdf files":""}
     ranges = {
             "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
             "page":[str(y) for y in range(1,100)],
             "page-size":[str(y) for y in range(30,100,10)], 
             "task": ["All", "Reading Comprehension", "Machine Reading Comprehension","Sentiment Analysis", "Question Answering", "Transfer Learning","Natural Language Inference", "Computer Vision", "Machine Translation", "Text Classification", "Decision Making"],
             "conference": ["All", "Arxiv", "ACL", "Workshops", "EMNLP", "IJCNLP", "NAACL", "LERC", "CL", "COLING", "BEA"],
-            "dataset": ["All","SQuAD", "RACE", "Social Media", "TriviaQA", "SNLI", "GLUE", "Image Net", "MS Marco", "TREC", "News QA" ]
+            "dataset": ["All","SQuAD", "RACE", "Social Media", "TriviaQA", "SNLI", "GLUE", "Image Net", "MS Marco", "TREC", "News QA" ],
+            "last results":["None"],
+            "saved articles":["None"],
+            "pdf files":["None"],
             }
 
+    last_results_file = user_data_dir(appname, appauthor) + "/last_results.pkl"
+    obj_file = Path(last_results_file) 
+    if not obj_file.is_file():
+        ranges["last results"] =["None"] 
+    else:
+        cr_time = time.ctime(os.path.getmtime(last_results_file))
+        cr_date = datetime.datetime.strptime(str(cr_time), "%a %b %d %H:%M:%S %Y")
+        ranges["last results"] = [cr_date]
+
+
+    data_dir = user_data_dir(appname, appauthor) + "/articles"
+
+    saved_articles =  [Path(f).stem for f in Path(data_dir).glob('*') if f.is_file()]
+    if not saved_articles:
+        ranges["saved articles"] =["None"] 
+    else:
+        ranges["saved articles"] = saved_articles
+
+    pdf_files =  [Path(f).name for f in Path(".").glob('*.pdf') if f.is_file()]
+    if not pdf_files:
+        ranges["pdf files"] =["None"] 
+    else:
+        ranges["pdf files"] = pdf_files
     for opt in opts:
        if opt in ranges:
            opts[opt] = ranges[opt][0]
@@ -623,11 +722,15 @@ def main(stdscr):
         c += 1
 
 
-    theme_opts = None # load_obj("art_opts")
+    conf = load_obj("conf", "")
+    if conf is None:
+        conf = {"theme":"default"}
+
+    theme_opts = load_obj(conf["theme"], "themes")
     colors = [str(y) for y in range(510)]
     if theme_opts is None:
         theme_opts = {
-                "preset":"preset1",
+                "preset":"default",
                 "text-color":'246', 
                 "background-color":'310',
                 "head-color": str(cGray),
@@ -638,7 +741,7 @@ def main(stdscr):
 
 
     theme_ranges = {
-            "preset":["preset1", "preset2", "preset3"],
+            "preset":["default", "preset3"],
             "text-color":colors,
             "background-color":colors,
             "head-color":colors,
@@ -647,27 +750,60 @@ def main(stdscr):
             "title-color":colors,
             }
 
-
+    themes_dir = user_data_dir(appname, appauthor) + "/themes"
+    saved_themes =  [Path(f).stem for f in Path(themes_dir).glob('*') if f.is_file()]
+    if not saved_themes:
+        theme_ranges["preset"] =["default"] 
+    else:
+        theme_ranges["preset"] = saved_themes
 
     clear_screen(std)
-    ch = ord('a')
-    while ch != ord('q'):
-        show_info("q) quit    r) search   h) help")
-        ch = show_menu(opts, ranges)
-        save_obj(opts, "query_opts")
-        if chr(ch) == 'r' or chr(ch) == 'g':
+    choice = ord('a')
+    shortkeys = {"y":"year", "o":"saved articles", "p":"pdf files"}
+    while choice != ord('q'):
+        info = "s) search l) last results o) saved articles  h) help  q) quit"
+        
+        choice, opts = show_menu(opts, ranges, shortkeys = shortkeys, info = info)
+        ch = chr(choice)
+        save_obj(opts, "query_opts", "")
+        if ch in ['l', 'o', 's', 'r', 'p']:
             for k,v in opts.items():
                 if k in filter_items and v and v != "All":
                     filters[k] = str(v)
             clear_screen(std)
             try:
-                ret = request(opts["search"], opts["page"], opts["page-size"], filters)
+                ret = ""
+                if ch == 'r':
+                    show_info("Getting articles...")
+                    ret = request(opts["search"], opts["page"], opts["page-size"], filters)
+                elif ch == 'p':
+                    pdf = opts["pdf files"]
+                    data = pdfparser(pdf)
+                    art = [{"id":pdf, "title":pdf, "sections":[{"title":"all", "fragments":[{"text":data}]}]}]
+                    ret = show_results(art, pdf)
+                elif ch == 'l':
+                     articles = load_obj("last_results", "")
+                     if articles != None:
+                         ret = show_results(articles, "last_results")
+                     else:
+                         show_err("Last results is missing....")
+                elif ch == 'o':
+                     selected = opts["saved articles"]
+                     if selected == None:
+                         show_err("Please select articles to load")
+                     else:
+                         articles = load_obj(selected, "articles")
+                         if articles != None:
+                             ret = show_results(articles, "sel articles")
+                         else:
+                             show_err("Unable to load the file....")
+
                 if ret:
                     mprint(ret, std)
                     std.getch()
 
             except KeyboardInterrupt:
-                ch = ord('q')
+                choice = ord('q')
                 show_cursor()
 
 if __name__ == "__main__":
