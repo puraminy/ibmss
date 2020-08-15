@@ -37,7 +37,7 @@ def show_cursor(useCur = True):
         sys.stdout.write("\033[?25h")
         sys.stdout.flush()
 
-def mprint(text, stdscr =None, color=0, attr = None, end="\n"):
+def mprint(text, stdscr =None, color=0, attr = None, end="\n", pad = False):
     if stdscr is None:
         print(text, end=end)
     else:
@@ -47,9 +47,12 @@ def mprint(text, stdscr =None, color=0, attr = None, end="\n"):
         height, width = stdscr.getmaxyx()
         #stdscr.addnstr(text + end, height*width-1, c)
         stdscr.addstr(text + end, c)
-        stdscr.refresh()
+        if pad:
+            pass #stdscr.refresh(0,0, 0,0, height -5, width)
+        else:
+            stdscr.refresh()
 
-def print_there(x, y, text, stdscr = None, color=0, attr = None):
+def print_there(x, y, text, stdscr = None, color=0, attr = None, pad = False):
     if stdscr is not None:
         c = cur.color_pair(color)
         if attr is not None:
@@ -57,17 +60,20 @@ def print_there(x, y, text, stdscr = None, color=0, attr = None):
         height, width = stdscr.getmaxyx()
         #stdscr.addnstr(x, y, text, height*width-1, c)
         stdscr.addstr(x, y, text, c)
-        stdscr.refresh()
+        if pad:
+            pass #stdscr.refresh(0,0, x,y, height -5, width)
+        else:
+            stdscr.refresh()
     else:
         sys.stdout.write("\x1b7\x1b[%d;%df%s\x1b8" % (x, y, text))
         sys.stdout.flush()
 def clear_screen(stdscr = None):
     if stdscr is not None:
-        stdscr.clear()
+        stdscr.erase()
         stdscr.refresh()
     else:
         os.system('clear')
-def minput(stdscr, r, c, prompt_string, default=""):
+def rinput(stdscr, r, c, prompt_string, default=""):
     show_cursor()
     cur.echo() 
     stdscr.addstr(r, c, prompt_string)
@@ -84,27 +90,32 @@ def minput(stdscr, r, c, prompt_string, default=""):
         cur.noecho()
         return default
 
-def rinput(stdscr, r, c, prompt_string):
+def minput(stdscr, r, c, prompt_string):
+    show_cursor()
+    cur.echo() 
+    stdscr.keypad(False)
     stdscr.addstr(r, c, prompt_string)
     stdscr.refresh()
+    stdscr.clrtoeol()
     inp = ""
     ch = 'b'
-    show_cursor()
     while ch != cur.KEY_ENTER and ch != 10:
         ch = stdscr.getch()
-        clear_screen(stdscr)
         if ch == 127 or ch == cur.KEY_BACKSPACE:
             inp=inp[:-1]
         if ch == 27:
             hide_cursor()
+            cur.noecho()
             return "<ESC>"
         else:
-            ch =chr(ch)
-            if ch.isalnum() or ch in [' ','-','_',':','.','?','+']:
-                inp += ch
+            letter =chr(ch)
+            if letter.isalnum() or letter in [' ','-','_',':','.','?','+']:
+                inp += letter 
             else:
                 cur.beep()
-        stdscr.addstr(r, len(prompt_string)+1, inp)
+        stdscr.addstr(r, c+ len(prompt_string), inp)
+        stdscr.clrtoeol()
+    cur.noecho()
     hide_cursor()
     return inp  
 
@@ -151,6 +162,7 @@ def split_into_sentences(text):
     text = text.replace("\n"," ")
     text = re.sub(prefixes,"\\1<prd>",text)
     text = re.sub(websites,"<prd>\\1",text)
+    text = text.replace("[FRAG]","<stop>")
     text = text.replace("Ph.D.","Ph<prd>D<prd>")
     text = text.replace("et al.","et al<prd>")
     text = text.replace("e.g.","e<prd>g<prd>")
