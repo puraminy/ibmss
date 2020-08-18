@@ -93,7 +93,7 @@ def load_obj(name, directory):
         return pickle.load(f)
 
 # Add or remove an item from the list of selected sections of articles
-def toggle_in_list(d, art, ch):
+def add_remove_sels(d, art, ch):
     key = art["id"] # article id
     sects = 'abstract introduction conclusion'
     if not key in d:
@@ -103,6 +103,7 @@ def toggle_in_list(d, art, ch):
            d[key] = [s["title"].lower() for s in art["sections"]]
     else: 
         del d[key]
+    save_obj(d, "sels", "")
 
 
 def request(query, page = 1, size=40, filters = None):
@@ -148,42 +149,83 @@ def show_results(articles, fid):
     clear_screen(std)
     rows, cols = std.getmaxyx()
     ch = ''
-    sels = {}
+    sels = load_obj("sels","")
+    if sels is None:
+        sels = {}
     start = 0
-    sects_num,frags_num = 0,0
-    k,fc,sc  = 0,0,0
+    sects_num = 0
+    k,sc  = 0,0
     N = len(articles)
     mode = 'list'
     ls = True
     fast_read = False
     show_prev = False
-    break_to_sent = True 
-    text_win = cur.newpad(rows*3, cols)
-    width = cols - 10
+    break_to_sent = False 
+    start_row = 0
+    text_win = cur.newpad(rows*20, cols - 10)
+    width = cols - 10 
+
     # text_win = std
     if N == 0:
         return "No result fond!"
     bg = ""
+    expand = 3
     new_art = True
     new_sect = True
     old_sc = -1 
     frags_text = ""
     art_id = 0
+    si = 0
+    fc = 0
+    cury = 0
+    page_height = rows - 4
+    scroll = 1
+    nod = {}
     while ch != ord('q'):
         text_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
         # clear_screen(text_win)
         text_win.clear()
-        text_win.refresh(0,0, 0,0, rows-1, cols)
+        start_row = max(0, start_row)
+        start_row = min(cury - page_height, start_row)
+        if bg != theme_opts["back-color"]:
+            bg = theme_opts["back-color"]
+            text_win.refresh(start_row,0, 0,0, rows-1, cols)
         k = max(k, 0)
         k = min(k, len(articles) - 1)
         k = min(k, N-1)
+        pos = {} 
         art = articles[k]
         if art["id"] != art_id:
-            art_id = art['id']
-            new_art = True
-            new_sect = True
-            old_sc = -1
-            sc = 0
+           art_id = art['id']
+           with open(art_id + ".txt", "w") as ff:
+               print(art, file = ff)
+           new_art = True
+           new_sect = True
+           old_sc = -1
+           sc = 0
+           fc = 0
+           si = 0
+            
+           fsn = 0
+           ffn = 0
+           for b in art["sections"]:
+               if not "frags_offset" in b:
+                   frags_text = ""
+                   b['frags_offset'] = ffn
+                   b["sents_offset"] = fsn
+                   for c in b['fragments']:
+                       text = c['text']
+                       if text.strip() == "":
+                           del b["fragments"][c]
+                       else:
+                           sents = split_into_sentences(text)
+                           c['sents_offset'] = fsn 
+                           c['sents_num'] = len(sents)
+                           fsn += len(sents)
+                           ffn += 1
+                   b["sents_num"] = fsn - b["sents_offset"]
+                   b['frags_num'] = len(b["fragments"])
+
         if sc != old_sc:
             new_sect = True
             old_sc = sc
@@ -199,69 +241,62 @@ def show_results(articles, fid):
            sc = min(sc, sects_num)
            title = "\n".join(textwrap.wrap(a["title"], width)) # wrap at 60 characters
            top =  "["+str(k)+"] " + title
-           mprint(top,  text_win, TITLE_COLOR, attr = cur.A_BOLD, pad = True) 
-           mprint("", text_win, pad = True)
+           mprint(top,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
+           mprint("", text_win)
+           fsn = 0
+           ffn = 0
            for b in a["sections"]:
-               if sn != sc:
-                   sect_title = b["title"]
-                   if art_id in sels and b["title"].lower() in sels[art_id]:
-                       # print_there(sn,0, b["title"], sect_win, 7)
-                       mprint("* " +sect_title, text_win, SEL_ITEM_COLOR, cur.A_UNDERLINE, pad = True)
-                   else:
-                       # print_there(sn, 0, b["title"], sect_win, 10)
-                       mprint(sect_title, text_win, ITEM_COLOR, pad = True)
+               fragments = b["fragments"]
+               fnum = len(fragments)
+               if sn == sc:
+                   sect_fc = fc - b["frags_offset"]
+                   sect_title = b["title"] + f"({sect_fc+1}/{fnum})" 
                else:
-                   if not "frags_text" in b:
-                       frags_text = ""
-                       for c in b['fragments']:
-                           frags_text +=  c['text'] + "[FRAG]"
-                       b["frags_text"] = frags_text
-                   else:
-                       frags_text = b["frags_text"]
-                   if break_to_sent:
-                       sents = split_into_sentences(frags_text)    
-                       fragments = []
-                       for sent in sents:
-                           frag = {}
-                           frag["text"] = sent
-                           fragments.append(frag)
-                       b["fragments"] = fragments
-                   else:
-                       parts = frags_text.split("[FRAG]")
-                       parts = parts[:-1]
-                       fragments = []
-                       for part in parts:
-                           frag = {}
-                           frag["text"] = part
-                           fragments.append(frag)
-                       b["fragments"] = fragments
-                   frags_num = len(fragments)
-                   sect_title = b["title"] + f"({fc+1}/{frags_num})" 
-                   if art_id in sels and b["title"].lower() in sels[art_id]:
-                       mprint("* "+sect_title, text_win, SEL_ITEM_COLOR, pad = True)
-                   else:
-                       mprint(sect_title, text_win, CUR_ITEM_COLOR, attr = cur.A_BOLD, pad = True)
-                   mprint("", text_win, pad = True)
-                   for fn, frag in enumerate(fragments):
-                       if fn == fc:
-                          prev_frag_text = ""
-                          if show_prev and fc > 0:
-                              prev_frag_text = fragments[fc-1]['text']
-                              prev_frag_text = "\n".join(textwrap.wrap(prev_frag_text, width - 4))
-                              prev_frag_text =  textwrap.indent(prev_frag_text, " "*2) 
-                          frag_text = "\n".join(textwrap.wrap(frag['text'], width - 4))
-                          frag_text =  textwrap.indent(frag_text, " "*2) 
-                          if prev_frag_text == "":
-                              color = TEXT_COLOR
-                              if "level" in b["fragments"][fc]:
-                                 color = b["fragments"][fc]["level"] % 250
-                              mprint(frag_text, text_win, color, pad = True)
-                              mprint("", text_win, pad = True)
-                          else:
-                              mprint(prev_frag_text, text_win, cGray, pad = True)
-                              mprint(frag_text, text_win, TEXT_COLOR, pad = True)
-                              mprint("", text_win, pad = True)
+                   sect_title = b["title"]
+               if art_id in sels and b["title"].lower() in sels[art_id]:
+                   mprint(sect_title, text_win, SEL_ITEM_COLOR)
+               else:
+                   _color = CUR_ITEM_COLOR if sc == sn else ITEM_COLOR
+                   mprint(sect_title, text_win, _color, attr = cur.A_BOLD)
+               if expand == 0:
+                   fsn += b["sents_num"] 
+                   ffn += len(b["fragments"])
+               else:
+                   # mprint("", text_win)
+                   for frag in fragments:
+                       if ffn != fc and expand == 1:
+                           fsn += frag['sents_num']
+                           ffn += 1
+                       else:
+                          frag_sents = split_into_sentences(frag['text'])
+                          frag_text = frag['text']
+                          frag_text = "\n".join(textwrap.wrap(frag_text, width))
+                          #frag_text =  textwrap.indent(frag_text) 
+                          color = TEXT_COLOR
 
+                          # if "level" in frag:
+                             # color = frag["level"] % 250
+                          hlcolor = SEL_ITEM_COLOR
+                          if True:
+                              for sent in frag_sents:
+                                  sent = "\n".join(textwrap.wrap(sent, width -5))
+                                  if fsn == si:
+                                      mprint(sent, text_win, hlcolor, end= " ")
+                                  else:
+                                      mprint(sent, text_win, color, end=" ")
+                                  feedback = nod[fsn] if fsn in nod else "okay?"
+                                  if feedback == "okay?":
+                                      f_color = 165
+                                  elif feedback == "OK":
+                                      f_color = 148
+                                  elif feedback == "So":
+                                      f_color = 162
+                                  mprint(feedback, text_win, f_color)
+                                  pos[fsn],_ = text_win.getyx()
+                                  fsn += 1
+                          
+                          mprint("\n", text_win, color)
+                          ffn += 1
                sn += 1
         else:
             for j,a in enumerate(articles[start:start + 15]): 
@@ -277,14 +312,22 @@ def show_results(articles, fid):
                 if i == k:
                     color = CUR_ITEM_COLOR
 
-                mprint(item, text_win, color, pad = True)
+                mprint(item, text_win, color)
 
         #print(":", end="", flush=True)
-        text_win.refresh(0,0, 2,5, rows -5, cols- 5)
+        cury, curx = text_win.getyx()
+        if mode == 'd':
+            sc = min(sc, sects_num)
+            f_offset = art['sections'][sc]['frags_offset'] 
+            fi = fc - f_offset + 1            
+            offset = art["sections"][sc]["fragments"][fi - 1]["sents_offset"] 
+            show_info("sc:" + str(sc) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
+        if si in pos:    
+            start_row = pos[si] - 7 
+        text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
+
         ch = get_key(std)
         clear_screen(win_info)
-        if ch == ord('b'):
-            break_to_sent = not break_to_sent
         if ch == ord('z'):
             if not sels:
                 show_err("No article was selected")
@@ -303,18 +346,24 @@ def show_results(articles, fid):
 
         if ch == ord('q') and mode == 'd':
             ch = 0
+            start_row = 0
             mode = 'list'
         if ch == ord('x'):
             fast_read = not fast_read
         if ch == ord('f') or ch == ord('s'):
-            toggle_in_list(sels, art, ch)
-
+            add_remove_sels(sels, art, ch)
+        if ch == ord('e') and mode == 'd':
+            if expand < 3:
+                expand += 1
+        if ch == ord('c') and mode == 'd':
+            if expand > 0:
+                expand -= 1
         if ch == ord('a'):
             for ss in range(start,start+15):
                   rr = articles[ss]
-                  toggle_in_list(sels, rr, 's')
+                  add_remove_sels(sels, rr, 's')
 
-        if ch == ord('c') and mode == 'd':
+        if ch == ord('s') and mode == 'd':
             cur_sect = art["sections"][sc]["title"].lower()
             if art_id in sels:
                 if cur_sect in sels[art_id]:
@@ -344,76 +393,128 @@ def show_results(articles, fid):
                     show_err("Unknown command:" + command)
         if ch == ord('n'):
             k+=1
-        if ch == cur.KEY_RIGHT and mode == 'd': 
-                art["sections"][sc]["fragments"][fc]["level"] = random.randint(3, 9) 
-                fc += 1
         if ch == ord('l') or ch == 127:
+            start_row = 0
             mode = 'list'
-        if ch == ord('d') or ch == cur.KEY_RIGHT or ch == 10 or ch == 9:
-            if mode == 'list':
-                mode = 'd'
-                fc = 0
-                sc = 0
-        elif ch == cur.KEY_LEFT:
+        if ch == cur.KEY_RIGHT or chr(ch) in ['o','1','2','3']:
+            if chr(ch) == 'o' or chr(ch) == '1':
+                nod[si] = "OK"
+            elif chr(ch) == "2":
+                nod[si] = "So"
+            elif chr(ch) == "3":
+                nod[si] = "Didn't got"
+            if mode == 'd':
+                si += 1
+                sents_num = art["sections"][sc]["fragments"][fi -1]["sents_num"] 
+                if si > offset + sents_num - 1:
+                    fc += 1
+            else:
+                k += 1
+        if ch == cur.KEY_LEFT:
+            if mode == 'd':
+                si -= 1
+                if si < 0: 
+                    si = 0
+                if si < offset:
+                    fc -= 1
+
+            else:
+                k -= 1
+        update_si = False
+        if ch == ord('n') and mode == 'd': 
+                art["sections"][sc]["fragments"][fi -1]["level"] = random.randint(3, 9) 
+                fc += 1
+                update_si = True
+        if ch == ord('p'):
             if mode == 'd':
                 fc -= 1
-        elif ch == cur.KEY_UP:
+                update_si = True
+
+        if ch == cur.KEY_DOWN:
+            if mode == 'list':
+                k +=1
+            else:
+                if start_row <= cury - scroll:
+                    start_row += scroll
+                else:
+                    cur.beep()
+        if ch == cur.KEY_UP:
+            if mode == 'list':
+                k -= 1
+            else:
+                if start_row > 0:
+                    start_row -= scroll
+                else:
+                    cur.beep()
+
+        if k >= start + 15:
+            ch = cur.KEY_NPAGE
+        if k < start:
+            ch = "prev_pg"
+
+        if ch == cur.KEY_PPAGE or ch == 'prev_pg':
             if mode == 'd': 
                 sc -= 1
-                fc = 0
+                fc = art["sections"][sc]["frags_offset"]
+                update_si = True
             else:
-                k -=1
-        elif ch == cur.KEY_DOWN:
+                start -= 15
+                start = max(start, 0)
+                k = start + 14 if ch == 'prev_pg' else start
+        elif ch == cur.KEY_NPAGE:
             if mode == 'd':
                 sc += 1
-                fc = 0
+                fc = art["sections"][sc]["frags_offset"]
+                update_si = True
             else:
-                k +=1
+                start += 15
+                start = min(start, N - 15)
+                k = start
         elif ch == cur.KEY_HOME:
             if mode == 'd':
                 sc = 0
                 fc = 0
+                si = 0
             else:
                 k = start
         elif ch == cur.KEY_END:
             if mode == 'd':
                 sc = sects_num
-                fc = 0
+                fc = art["sections"][sc]["frags_offset"]
+                update_si = True
             else:
                 k = start + 14
 
         if mode == 'd':
-            if fc < 0:
-                fc = 0
+            sc = max(0, sc)
+            sc = min(sc, sects_num - 1)
+            f_offset = art["sections"][sc]["frags_offset"]
+            frags_num = art["sections"][sc]["frags_num"]
+            if fc < f_offset:
                 if sc > 0:
                     sc -=1
                 else:
-                    mode = 'list'
-            elif fc >= frags_num:
-                fc = 0
+                    sc = 0
+                    fc = 0
+                    cur.beep()
+            elif fc >= f_offset + frags_num:
                 if sc < sects_num - 1:
                     sc +=1
                 else:
-                    k +=1
-                    sc = 0
-        if k >= start + 15:
-            ch = cur.KEY_NPAGE
-        if k < start:
-            ch = "prev_pg"
-        if ch == cur.KEY_NPAGE:
+                    fc -= 1
+                    cur.beep()
+            if update_si:
+                f_offset = art['sections'][sc]['frags_offset'] 
+                fi = fc - f_offset + 1            
+                si = art["sections"][sc]["fragments"][fi - 1]["sents_offset"] 
+
+            art['sections'][sc]['fc'] = fc 
+
+        if ch == ord('d') or ch == cur.KEY_RIGHT or ch == 10 or ch == 9:
             if mode == 'list':
-                start += 15
-                start = min(start, N - 15)
-                k = start
-            else:
-                k +=1
-        if ch == cur.KEY_PPAGE or ch == 'prev_pg':
-            if mode == 'list':
-                start -= 15
-                start = max(start, 0)
-                k = start + 14 if ch == 'prev_pg' else start
-            else:
-                k -= 1
+                mode = 'd'
+                fc = 0
+                sc = 0
         if ch == ord('w') or ch == ord('m'):
             merge = ch == 'm'
             if not sels:
@@ -509,25 +610,26 @@ def apply_settings(arg, opts, ranges, win):
                 else:
                     show_err(val + " is invalid for " + key + ", press any key ...")
 
-def refresh_menu(opts, menu_win, sel):
+def refresh_menu(opts, menu_win, sel, ranges):
     global clG
     clear_screen(menu_win)
     row = 3 
     col = 5
     gap = col + 15
     for k, v in opts.items():
+       colon = ":" # if not k in ranges else ">"
        if k == sel:
            if k == "sep":
-               print_there(row, col,  str(v) + ":", menu_win, CUR_ITEM_COLOR)
+               print_there(row, col,  str(v) + colon,  menu_win, CUR_ITEM_COLOR)
            else:
                print_there(row, col, "{:<15}".format(k), menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
-               print_there(row, gap, ">", menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
+               print_there(row, gap, colon, menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
        else:
            if k == "sep":
-               print_there(row, col,  str(v) + ":", menu_win, TITLE_COLOR)
+               print_there(row, col,  str(v) + colon, menu_win, TITLE_COLOR)
            else:
                print_there(row, col, "{:<15}".format(k), menu_win, ITEM_COLOR, attr = cur.A_BOLD)
-               print_there(row, gap, ":", menu_win, ITEM_COLOR, attr = cur.A_BOLD)
+               print_there(row, gap, colon, menu_win, ITEM_COLOR, attr = cur.A_BOLD)
 
        if "color" in k:
            print_there(row, col + 17, "{:^5}".format(str(v)), menu_win, color_map[k]) 
@@ -588,17 +690,17 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             show_info(info)
         sel,mi = get_sel(opts, mi)
         if mode == 'm':
-            refresh_menu(opts, menu_win, sel)
+            refresh_menu(opts, menu_win, sel, ranges)
         if mode == 's':
            if sel not in ranges:
               # opts[sel]=""
-              refresh_menu(opts, menu_win, sel)
+              refresh_menu(opts, menu_win, sel, ranges)
               val = minput(menu_win,row + mi, col, "{:<15}".format(sel) + ": ") 
               if val != "<ESC>":
                   opts[sel] = val
               mi += 1
               sel,mi = get_sel(opts, mi)
-              refresh_menu(opts, menu_win, sel)
+              refresh_menu(opts, menu_win, sel, ranges)
               mode = 'm'
               mt = ""
            else:
@@ -627,6 +729,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                   reset_colors(opts)
               if start + 10 < len(ranges[sel]):
                   mprint("...", sub_menu_win, cW)
+              sub_menu_win.refresh()
 
         if _help:
             _help = False
@@ -641,7 +744,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             mprint(cont, menu_win)
             show_info("Press any key to return ...")
             a = std.getch()
-            refresh_menu(opts, menu_win, sel)
+            refresh_menu(opts, menu_win, sel, ranges)
             if info != "":
                 show_info(info)
             ch = 'a'
@@ -707,7 +810,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                         last_preset = new_preset
                         conf["theme"] = new_preset
                         save_obj(conf, "conf", "")
-                        refresh_menu(opts, menu_win, sel)
+                        refresh_menu(opts, menu_win, sel, ranges)
                         show_info(new_preset +  " was loaded")
                     else:
                         show_err("The file is missing")
@@ -735,7 +838,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             reset_colors(opts)
             show_info(opts["preset"] +  " was saved as " + fname)
             opts["preset"] = fname
-            refresh_menu(opts, menu_win, sel)
+            refresh_menu(opts, menu_win, sel, ranges)
         elif chr(ch) in shortkeys:
             mi = list(opts.keys()).index(shortkeys[chr(ch)])
             mode = 's'
