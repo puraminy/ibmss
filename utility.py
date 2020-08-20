@@ -160,89 +160,33 @@ def rplit_into_sentences(text):
 def split_into_sentences(text, debug = False, limit = 1):
     text = " " + text + "  "
     text = text.replace("\n"," ")
-    if debug:
-        print(text)
     text = re.sub(prefixes,"\\1<prd>",text)
-    if debug:
-        print(text)
     text = re.sub(websites,"<prd>\\1",text)
-    if debug:
-        print(text)
     text = text.replace("[FRAG]","<stop>")
-    if debug:
-        print(text)
     text = text.replace("Ph.D.","Ph<prd>D<prd>")
-    if debug:
-        print(text)
     text = text.replace("et al.","et al<prd>")
-    if debug:
-        print(text)
     text = text.replace("e.g.","e<prd>g<prd>")
-    if debug:
-        print(text)
     text = text.replace("i.e.","i<prd>e<prd>")
-    if debug:
-        print(text)
     text = re.sub("\s" + alphabets + "[.] "," \\1<prd> ",text)
-    if debug:
-        print(text)
     text = re.sub(acronyms+" "+starters,"\\1<stop> \\2",text)
-    if debug:
-        print(text)
     text = re.sub(alphabets + "[.]" + alphabets + "[.]" + alphabets + "[.]","\\1<prd>\\2<prd>\\3<prd>",text)
-    if debug:
-        print(text)
     text = re.sub(alphabets + "[.]" + alphabets + "[.]","\\1<prd>\\2<prd>",text)
-    if debug:
-        print(text)
     text = re.sub(" "+suffixes+"[.] "+starters," \\1<stop> \\2",text)
-    if debug:
-        print(text)
     text = re.sub(" (\d+)[.](\d+) "," \\1<prd>\\2 ",text)
-    if debug:
-        print(text)
     text = text.replace("...","<prd><prd><prd>")
-    if debug:
-        print(text)
     text = re.sub(digits + "[.]" + digits,"\\1<prd>\\2",text)
-    if debug:
-        print(text)
     text = re.sub(" "+suffixes+"[.]"," \\1<prd>",text)
-    if debug:
-        print(text)
     text = re.sub(" " + alphabets + "[.]"," \\1<prd>",text)
-    if debug:
-        print(text)
     if "”" in text: text = text.replace(".”","”.")
-    if debug:
-        print(text)
     if "\"" in text: text = text.replace(".\"","\".")
-    if debug:
-        print(text)
     if "!" in text: text = text.replace("!\"","\"!")
-    if debug:
-        print(text)
     if "?" in text: text = text.replace("?\"","\"?")
-    if debug:
-        print(text)
     text = text.replace(".",".<stop>")
-    if debug:
-        print(text)
     text = text.replace("?","?<stop>")
-    if debug:
-        print(text)
     text = text.replace("!","!<stop>")
-    if debug:
-        print(text)
     text = text.replace("<prd>",".")
-    if debug:
-        print(text)
     sentences = text.split("<stop>")
-    if debug:
-        print(text)
     if len(sentences) > 1:
         sentences = sentences[:-1]
-    if debug:
-        print(text)
     sentences = [s.strip() for s in sentences if len(s) > limit]
     return sentences

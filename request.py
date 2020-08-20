@@ -26,6 +26,8 @@ std = None
 theme_opts = {}
 theme_ranges = {}
 conf = {}
+nods = {}
+
 TEXT_COLOR = 100
 ITEM_COLOR = 101
 CUR_ITEM_COLOR = 102
@@ -40,6 +42,15 @@ color_map = {
         "cur-item-color":CUR_ITEM_COLOR,
         "sel-item-color":SEL_ITEM_COLOR,
         "title-color":TITLE_COLOR,
+        }
+nod_color = {
+        "okay?":242,
+        "OK":148,
+        "PASS":178,
+        "Didn't get":218,
+        "Interesting!":248,
+        "So?":118,
+        "Got it!":98,
         }
 
 cW = 7
@@ -56,6 +67,7 @@ clGray = 250
 clG = 12
 cllC = 83
 cO =  209
+
 
 def reset_colors(theme, bg = None):
     if bg is None:
@@ -91,6 +103,18 @@ def load_obj(name, directory):
         return None 
     with open(fname, 'rb') as f:
         return pickle.load(f)
+
+def del_obj(name, directory):
+    if directory != "":
+        folder = user_data_dir(appname, appauthor) + "/" + directory
+    else:
+        folder = user_data_dir(appname, appauthor)
+    fname = folder + '/' + name + '.pkl'
+    obj_file = Path(fname) 
+    if not obj_file.is_file():
+        return None 
+    else:
+        obj_file.unlink()
 
 # Add or remove an item from the list of selected sections of articles
 def add_remove_sels(d, art, ch):
@@ -143,10 +167,12 @@ def request(query, page = 1, size=40, filters = None):
     return response.json()['searchResults']['results'],""
     
 
-def show_results(articles, fid):
+def show_results(articles, fid, mode = 'list'):
+
+    global theme_opts, theme_ranges
+
     if len(articles) == 0:
         return "No article was loaded!"
-    clear_screen(std)
     rows, cols = std.getmaxyx()
     ch = ''
     sels = load_obj("sels","")
@@ -156,13 +182,15 @@ def show_results(articles, fid):
     sects_num = 0
     k,sc  = 0,0
     N = len(articles)
-    mode = 'list'
     ls = True
     fast_read = False
     show_prev = False
     break_to_sent = False 
     start_row = 0
-    text_win = cur.newpad(rows*20, cols - 10)
+    text_win = cur.newpad(rows*50, cols - 10)
+    main_win = cur.newwin(rows, cols, 0, 0)
+    text_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
+    main_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
     width = cols - 10 
 
     # text_win = std
@@ -174,20 +202,20 @@ def show_results(articles, fid):
     new_sect = True
     old_sc = -1 
     frags_text = ""
-    art_id = 0
+    art_id = -1
     si = 0
     fc = 0
     cury = 0
+    nod = {}
     page_height = rows - 4
     scroll = 1
-    nod = {}
     while ch != ord('q'):
-        text_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
         # clear_screen(text_win)
         text_win.clear()
         start_row = max(0, start_row)
-        start_row = min(cury - page_height, start_row)
+        start_row = min(cury - 1, start_row)
         if bg != theme_opts["back-color"]:
+            clear_screen(main_win)
             bg = theme_opts["back-color"]
             text_win.refresh(start_row,0, 0,0, rows-1, cols)
         k = max(k, 0)
@@ -196,35 +224,48 @@ def show_results(articles, fid):
         pos = {} 
         art = articles[k]
         if art["id"] != art_id:
+           if art_id != 0 and nod:
+               nods[art_id] = nod
+               save_obj(nods, "nods", "")
            art_id = art['id']
-           with open(art_id + ".txt", "w") as ff:
-               print(art, file = ff)
+           # with open(art_id + ".txt", "w") as ff:
+           #    print(art, file = ff)
+           if art_id in nods:
+               nod = nods[art_id]
+           else:
+               nod = {}
            new_art = True
            new_sect = True
            old_sc = -1
            sc = 0
            fc = 0
            si = 0
-            
+           if nod:
+               while si in nod and nod[si] != "okay?":
+                   si += 1
            fsn = 0
            ffn = 0
+           frags_sents = {}
            for b in art["sections"]:
-               if not "frags_offset" in b:
-                   frags_text = ""
-                   b['frags_offset'] = ffn
-                   b["sents_offset"] = fsn
-                   for c in b['fragments']:
-                       text = c['text']
-                       if text.strip() == "":
-                           del b["fragments"][c]
-                       else:
-                           sents = split_into_sentences(text)
-                           c['sents_offset'] = fsn 
-                           c['sents_num'] = len(sents)
-                           fsn += len(sents)
-                           ffn += 1
-                   b["sents_num"] = fsn - b["sents_offset"]
-                   b['frags_num'] = len(b["fragments"])
+               frags_text = ""
+               b['frags_offset'] = ffn
+               b["sents_offset"] = fsn
+               for c in b['fragments']:
+                   text = c['text']
+                   if text.strip() == "":
+                       del b["fragments"][c]
+                   else:
+                       sents = split_into_sentences(text)
+                       frags_sents[ffn] = sents
+                       c['sents_offset'] = fsn 
+                       c['sents_num'] = len(sents)
+                       fsn += len(sents)
+                       ffn += 1
+               b["sents_num"] = fsn - b["sents_offset"]
+               b['frags_num'] = len(b["fragments"])
+           total_sents = fsn 
+           total_frags = ffn
+
 
         if sc != old_sc:
             new_sect = True
@@ -233,6 +274,7 @@ def show_results(articles, fid):
             new_sect = False
         if mode == 'd':
            a = art
+           start_time = time.time()
            #clear_screen(text_win)
            text_win.clear()
            sn = 0
@@ -268,29 +310,26 @@ def show_results(articles, fid):
                            fsn += frag['sents_num']
                            ffn += 1
                        else:
-                          frag_sents = split_into_sentences(frag['text'])
-                          frag_text = frag['text']
-                          frag_text = "\n".join(textwrap.wrap(frag_text, width))
-                          #frag_text =  textwrap.indent(frag_text) 
-                          color = TEXT_COLOR
+                          if not ffn in frags_sents:
+                              frag_sents = split_into_sentences(frag['text'])
+                              frags_sents[ffn] = frag_sents
+                          else:
+                              frag_sents = frags_sents[ffn]
 
                           # if "level" in frag:
                              # color = frag["level"] % 250
                           hlcolor = SEL_ITEM_COLOR
                           if True:
                               for sent in frag_sents:
+                                  feedback = nod[fsn] if fsn in nod else "0"
+                                  f_color = SEL_ITEM_COLOR
+                                  # f_color = nod_color[feedback]
+                                  color = TEXT_COLOR
                                   sent = "\n".join(textwrap.wrap(sent, width -5))
                                   if fsn == si:
                                       mprint(sent, text_win, hlcolor, end= " ")
                                   else:
                                       mprint(sent, text_win, color, end=" ")
-                                  feedback = nod[fsn] if fsn in nod else "okay?"
-                                  if feedback == "okay?":
-                                      f_color = 165
-                                  elif feedback == "OK":
-                                      f_color = 148
-                                  elif feedback == "So":
-                                      f_color = 162
                                   mprint(feedback, text_win, f_color)
                                   pos[fsn],_ = text_win.getyx()
                                   fsn += 1
@@ -321,12 +360,17 @@ def show_results(articles, fid):
             f_offset = art['sections'][sc]['frags_offset'] 
             fi = fc - f_offset + 1            
             offset = art["sections"][sc]["fragments"][fi - 1]["sents_offset"] 
-            show_info("sc:" + str(sc) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
-        if si in pos:    
-            start_row = pos[si] - 7 
+            show_info("sc:"+ str(sc) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset) +  " pos[0]:"+str(pos[0]))
+        if mode == 'd' and si in pos and not ch == ord('.') and not ch == ord(','):
+            if pos[si] > 7:    
+                start_row = pos[si] - 7 
+            else:
+                start_row = 0
         text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
 
         ch = get_key(std)
+        # this will stop the timer
+
         clear_screen(win_info)
         if ch == ord('z'):
             if not sels:
@@ -348,6 +392,9 @@ def show_results(articles, fid):
             ch = 0
             start_row = 0
             mode = 'list'
+            if art_id != 0 and nod:
+               nods[art_id] = nod
+               save_obj(nods, "nods", "")
         if ch == ord('x'):
             fast_read = not fast_read
         if ch == ord('f') or ch == ord('s'):
@@ -372,60 +419,66 @@ def show_results(articles, fid):
                     sels[art_id].append(cur_sect)
             else:
                 sels[art_id] = [cur_sect]
-        if ch == ord('p'):
-            k-=1
-        if ch == ord(":"):
-            cmd = get_cmd()
-            
-            if len(cmd) == 1:
-                command = cmd[0].strip()
-                if len(command) == 1:
-                    ch = command
-                elif command != "set":
-                    show_err("Unknown command:" + command)
-            else:
-                command = cmd[0].strip()
-                arg = cmd[1].strip()
-                if command == "w" or command == "write":
-                    fid = arg
-                    ch = ord("w")
-                elif command != "set":
-                    show_err("Unknown command:" + command)
-        if ch == ord('n'):
-            k+=1
-        if ch == ord('l') or ch == 127:
+        if ch == 127:
             start_row = 0
             mode = 'list'
-        if ch == cur.KEY_RIGHT or chr(ch) in ['o','1','2','3']:
-            if chr(ch) == 'o' or chr(ch) == '1':
-                nod[si] = "OK"
-            elif chr(ch) == "2":
-                nod[si] = "So"
-            elif chr(ch) == "3":
-                nod[si] = "Didn't got"
-            if mode == 'd':
-                si += 1
-                sents_num = art["sections"][sc]["fragments"][fi -1]["sents_num"] 
-                if si > offset + sents_num - 1:
-                    fc += 1
-            else:
-                k += 1
-        if ch == cur.KEY_LEFT:
-            if mode == 'd':
-                si -= 1
-                if si < 0: 
-                    si = 0
-                if si < offset:
-                    fc -= 1
+            if art_id != 0 and nod:
+               nods[art_id] = nod
+               save_obj(nods, "nods", "")
 
-            else:
-                k -= 1
+        if mode == 'd' and (ch == cur.KEY_RIGHT or ch == cur.KEY_DOWN or chr(ch).isdigit()):
+#            if chr(ch) == '0':
+#                nod[si] = "So?"
+#            elif ch == cur.KEY_RIGHT or chr(ch) == 'o' or chr(ch) == '1':
+#                nod[si] = "OK"
+#            elif chr(ch) == "2" or chr(ch) == 'p':
+#                nod[si] = "PASS"
+#            elif chr(ch) == "3":
+#                nod[si] = "Interesting!"
+#            elif chr(ch) == "4":
+#                nod[si] = "Didn't get"
+#            elif chr(ch) == "5":
+#                nod[si] = "Got it!"
+#            
+            end_time = time.time()
+            reading_time = end_time - start_time 
+            nod[si] = str(reading_time)
+            if si + 1 < total_sents:
+                si += 1
+            sents_num = art["sections"][sc]["fragments"][fi -1]["sents_num"] 
+            if si > offset + sents_num - 1:
+                fc += 1
+        if mode == 'd' and (ch == cur.KEY_LEFT or ch == cur.KEY_UP):
+            si -= 1
+            if si < 0: 
+                si = 0
+            if si < offset:
+                fc -= 1
+
         update_si = False
-        if ch == ord('n') and mode == 'd': 
+        if ch == ord('p'):
+            if mode == 'd':
+                k -= 1
+        if ch == ord('n'):
+            if mode == 'd':
+                k += 1
+            else:
+                articles = request
+        if ch == ord('k'):
+            sc -= 1
+            if sc >= 0:
+                fc = art["sections"][sc]["frags_offset"]
+                update_si = True
+        if ch == ord('j'):
+            sc += 1
+            if sc < sects_num:
+                fc = art["sections"][sc]["frags_offset"]
+                update_si = True
+        if ch == ord('l') and mode == 'd': 
                 art["sections"][sc]["fragments"][fi -1]["level"] = random.randint(3, 9) 
                 fc += 1
                 update_si = True
-        if ch == ord('p'):
+        if ch == ord('h') and mode == 'd':
             if mode == 'd':
                 fc -= 1
                 update_si = True
@@ -433,19 +486,20 @@ def show_results(articles, fid):
         if ch == cur.KEY_DOWN:
             if mode == 'list':
                 k +=1
+        if ch == ord('.'):
+            if start_row < cury:
+                start_row += scroll
             else:
-                if start_row <= cury - scroll:
-                    start_row += scroll
-                else:
-                    cur.beep()
+                cur.beep()
+
         if ch == cur.KEY_UP:
             if mode == 'list':
                 k -= 1
+        if ch == ord(','):
+            if start_row > 0:
+                start_row -= scroll
             else:
-                if start_row > 0:
-                    start_row -= scroll
-                else:
-                    cur.beep()
+                cur.beep()
 
         if k >= start + 15:
             ch = cur.KEY_NPAGE
@@ -454,18 +508,14 @@ def show_results(articles, fid):
 
         if ch == cur.KEY_PPAGE or ch == 'prev_pg':
             if mode == 'd': 
-                sc -= 1
-                fc = art["sections"][sc]["frags_offset"]
-                update_si = True
+                si = max(si - 10, 0)
             else:
                 start -= 15
                 start = max(start, 0)
                 k = start + 14 if ch == 'prev_pg' else start
         elif ch == cur.KEY_NPAGE:
             if mode == 'd':
-                sc += 1
-                fc = art["sections"][sc]["frags_offset"]
-                update_si = True
+                si = min(si + 10, total_sents -1)
             else:
                 start += 15
                 start = min(start, N - 15)
@@ -479,9 +529,9 @@ def show_results(articles, fid):
                 k = start
         elif ch == cur.KEY_END:
             if mode == 'd':
-                sc = sects_num
-                fc = art["sections"][sc]["frags_offset"]
-                update_si = True
+                si = total_sents -1 
+                sc = sects_num -1
+                fc = total_frags  -1
             else:
                 k = start + 14
 
@@ -505,16 +555,18 @@ def show_results(articles, fid):
                     cur.beep()
             if update_si:
                 f_offset = art['sections'][sc]['frags_offset'] 
-                fi = fc - f_offset + 1            
-                si = art["sections"][sc]["fragments"][fi - 1]["sents_offset"] 
+                fi = fc - f_offset             
+                si = art["sections"][sc]["fragments"][fi]["sents_offset"] 
 
             art['sections'][sc]['fc'] = fc 
-
-        if ch == ord('d') or ch == cur.KEY_RIGHT or ch == 10 or ch == 9:
-            if mode == 'list':
+        if ch == cur.KEY_ENTER or ch == 10:
                 mode = 'd'
                 fc = 0
                 sc = 0
+        if ch == ord('t'):
+            info = "s) save as   d) delete"
+            _, theme_opts = show_menu(theme_opts, theme_ranges, "::Settings", info = info)
+            save_obj(theme_opts, conf["theme"], "themes")
         if ch == ord('w') or ch == ord('m'):
             merge = ch == 'm'
             if not sels:
@@ -562,53 +614,6 @@ def show_results(articles, fid):
                 show_msg(str(num)+ " articles were downloaded and saved into:" + fid)
             ch = get_key(std)
     return "" 
-
-def get_cmd():
-
-    global theme_opts, theme_ranges
-    rows, cols = std.getmaxyx()
-    win = cur.newwin(1, cols, rows-1, 0) 
-    win.bkgd(' ', cur.color_pair(INFO_COLOR)) # | cur.A_REVERSE)
-    cmd = minput(win, 0, 0, ":")
-    # cmd = re.split(r'\s(?=")', cmd) 
-    cmd = shlex.split(cmd)
-    if len(cmd) == 0:
-        return ['<Enter>']
-    if len(cmd) == 1:
-        command = cmd[0]
-        if command == "set":
-            _, theme_opts = show_menu(theme_opts, theme_ranges, "::Settings")
-            save_obj(theme_opts, conf["theme"], "themes")
-            return cmd
-        else:
-            return cmd
- 
-    command = cmd[0].strip()
-    arg = cmd[1].strip()
-    if command != "set":
-        return cmd
-    else:
-        apply_settings(arg, theme_opts, theme_ranges, win)
-        return cmd
-
-def apply_settings(arg, opts, ranges, win):
-    arg = arg.split('=')
-    if len(arg) == 1:
-        show_err("use 'set opt=val' to set an option, press any key ...")
-    else:
-        key = arg[0].strip()
-        val = arg[1].strip()
-        if key not in opts:
-            show_err(key + " is an invalid option, press any key...")
-        else:
-           mi = list(opts.keys()).index(key)
-           if key not in ranges:
-               opts[key] = val
-           else:
-                if val in ranges[key]:
-                    opts[key] = val
-                else:
-                    show_err(val + " is invalid for " + key + ", press any key ...")
 
 def refresh_menu(opts, menu_win, sel, ranges):
     global clG
@@ -659,6 +664,24 @@ def show_msg(msg, color=INFO_COLOR):
 def show_err(msg, color=ERR_COLOR):
     show_msg(msg, color)
     win_info.getch()
+
+def load_preset(new_preset):
+    opts = load_obj(new_preset,"themes")
+    if opts == None:
+        dark ={'preset': 'dark', 'text-color': '250', 'back-color': '234', 'item-color': '65', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28'}
+        light = {'preset': 'light', 'text-color': '32', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28'}
+        save_obj(dark, "dark", "themes")
+        save_obj(light, "light", "themes")
+        theme_ranges["preset"].append("dark")
+        theme_ranges["preset"].append("light")
+        new_preset = "dark"
+        opts = dark
+
+    opts["preset"] = new_preset
+    reset_colors(opts)
+    conf["theme"] = new_preset
+    save_obj(conf, "conf", "")
+    return opts
 
 def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = ""):
     mi = 0
@@ -749,11 +772,8 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 show_info(info)
             ch = 'a'
         ch = get_key(std)
-        
-        if ch == ord(':'):
-            cmd = get_cmd()
             
-        elif ch == ord("h"):
+        if ch == ord("h"):
             _help = not _help
         elif ch == cur.KEY_DOWN:
             if mode == "m":
@@ -790,7 +810,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 opts[sel] = ranges[sel][si]
                 if "preset" in opts:
                     reset_colors(opts)
-                if sel == "pdf files":
+                if sel == "text files":
                     ch = ord('p')
                     return ch, opts
                 elif sel == "saved articles":
@@ -802,18 +822,10 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 elif sel == "preset":
                     save_obj(opts, last_preset, "themes")
                     new_preset = ranges[sel][si]
-                    tmp_opts = load_obj(new_preset,"themes")
-                    if tmp_opts != None:
-                        opts = tmp_opts
-                        opts["preset"] = new_preset
-                        reset_colors(opts)
-                        last_preset = new_preset
-                        conf["theme"] = new_preset
-                        save_obj(conf, "conf", "")
-                        refresh_menu(opts, menu_win, sel, ranges)
-                        show_info(new_preset +  " was loaded")
-                    else:
-                        show_err("The file is missing")
+                    opts = load_preset(new_preset)
+                    last_preset = new_preset
+                    refresh_menu(opts, menu_win, sel, ranges)
+                    show_info(new_preset +  " was loaded")
 
                 mode = 'm'    
                 mt = ""
@@ -832,13 +844,26 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
         elif ch == ord('q'):
             # show_cursor()
             break;
+        elif ch == ord('d') and "preset" in opts:
+            confirm = minput(win_info, 0, 1, "Are you sure you want to delete " + opts["preset"] + "? (y/n)")
+            if confirm == "y" or confirm == "Y":
+                del_obj(opts["preset"], "themes")
+                ranges["preset"].remove(opts["preset"])
+                new_preset = ranges["preset"][0] if len(ranges["preset"]) > 0 else "dark"
+                opts = load_preset(new_preset)
+                last_preset = new_preset
+                refresh_menu(opts, menu_win, sel, ranges)
+                show_info(new_preset +  " was loaded")
+
         elif ch == ord('s') and "preset" in opts:
-            fname = minput(win_info, 0, 0, "Save as:") 
-            save_obj(opts, fname, "themes")
-            reset_colors(opts)
-            show_info(opts["preset"] +  " was saved as " + fname)
-            opts["preset"] = fname
-            refresh_menu(opts, menu_win, sel, ranges)
+            fname = minput(win_info, 0, 1, "Save as:") 
+            if fname != "<ESC>":
+                save_obj(opts, fname, "themes")
+                reset_colors(opts)
+                show_info(opts["preset"] +  " was saved as " + fname)
+                opts["preset"] = fname
+                ranges["preset"].append(fname)
+                refresh_menu(opts, menu_win, sel, ranges)
         elif chr(ch) in shortkeys:
             mi = list(opts.keys()).index(shortkeys[chr(ch)])
             mode = 's'
@@ -864,16 +889,18 @@ def find(list, st, ch, default):
 
 def main(stdscr):
 
-    global theme_ranges, theme_opts, std, conf
+    global theme_ranges, theme_opts, std, conf, nods
 
     std = stdscr
+    cur.start_color()
+    cur.use_default_colors()
 
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
     opts = None # load_obj("query_opts")
     if opts is None:
-        opts = {"search":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"", "sep":"","last results":"", "saved articles":"","sep":""}
+        opts = {"search":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"", "sep":"","last results":"", "saved articles":"","sep":"", "text files":""}
     ranges = {
             "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
             "page":[str(y) for y in range(1,100)],
@@ -915,20 +942,13 @@ def main(stdscr):
     conf = load_obj("conf", "")
     if conf is None:
         conf = {"theme":"default"}
+    nods = load_obj("nods", "")
+    if nods is None:
+        nods = {}
 
-    theme_opts = load_obj(conf["theme"], "themes")
-    # mprint(str(theme_opts),std)
-    # std.getch()
     colors = [str(y) for y in range(-1, cur.COLORS)]
-    if theme_opts is None:
-        dark ={'preset': 'dark', 'text-color': '248', 'back-color': '234', 'item-color': '65', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28'}
-        light = {'preset': 'light', 'text-color': '32', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28'}
-        save_obj(dark, "dark", "themes")
-        save_obj(light, "light", "themes")
-        theme_opts = light 
-
     theme_ranges = {
-            "preset":["default"],
+            "preset":[],
             "text-color":colors,
             "back-color":colors,
             "item-color":colors,
@@ -937,6 +957,10 @@ def main(stdscr):
             "title-color":colors,
             }
 
+    theme_opts = load_preset(conf["theme"]) 
+    # mprint(str(theme_opts),std)
+    # std.getch()
+
     themes_dir = user_data_dir(appname, appauthor) + "/themes"
     saved_themes =  [Path(f).stem for f in Path(themes_dir).glob('*') if f.is_file()]
     if not saved_themes:
@@ -944,25 +968,22 @@ def main(stdscr):
     else:
         theme_ranges["preset"] = saved_themes
 
-    cur.start_color()
-    cur.use_default_colors()
     reset_colors(theme_opts)
     #os.environ.setdefault('ESCDELAY', '25')
     #ESCDELAY = 25
     clear_screen(std)
     choice = ord('a')
-    shortkeys = {"y":"year", "o":"saved articles"}
+    shortkeys = {"y":"year", "o":"saved articles", 'p':"text files"}
     while choice != ord('q'):
         info = "s) search l) last results o) saved articles  h) help  q) quit"
         
         choice, opts = show_menu(opts, ranges, shortkeys = shortkeys, info = info)
         ch = chr(choice)
         save_obj(opts, "query_opts", "")
-        if ch in ['l', 'o', 's', 'r']:
+        if ch in ['l', 'o', 's', 'r','p']:
             for k,v in opts.items():
                 if k in filter_items and v and v != "All":
                     filters[k] = str(v)
-            clear_screen(std)
             try:
                 ret = ""
                 if ch == 'r':
@@ -976,10 +997,11 @@ def main(stdscr):
                         save_obj(articles, "last_results", "")
                         ret = show_results(articles, fid)
                 elif ch == 'p':
-                    pdf = opts["pdf files"]
-                    data = pdfparser(pdf)
-                    art = [{"id":pdf, "title":pdf, "sections":[{"title":"all", "fragments":[{"text":data}]}]}]
-                    ret = show_results(art, pdf)
+                    text = opts["text files"]
+                    with open(text, "r") as f:
+                        data = f.read()
+                    art = [{"id":text, "title":text, "sections":[{"title":"all", "fragments":[{"text":data}]}]}]
+                    ret = show_results(art, text, mode = 'd')
                 elif ch == 'l':
                      articles = load_obj("last_results", "")
                      if articles != None:
