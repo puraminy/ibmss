@@ -90,16 +90,24 @@ def rinput(stdscr, r, c, prompt_string, default=""):
         cur.noecho()
         return default
 
-def minput(stdscr, r, c, prompt_string):
+def minput(stdscr, r, c, prompt_string, accept_on = [], default=""):
+    on_enter = False
+    if not accept_on:
+        on_enter = True
+        accept_on = [10, cur.KEY_ENTER]
+    else:
+        accept_on = [ord(ch) for ch in accept_on]
     show_cursor()
     cur.echo() 
     stdscr.keypad(False)
     stdscr.addstr(r, c, prompt_string)
     stdscr.refresh()
     stdscr.clrtoeol()
-    inp = ""
+    inp = default
     ch = 'b'
-    while ch != cur.KEY_ENTER and ch != 10:
+    while ch not in accept_on:
+        stdscr.addstr(r, c+ len(prompt_string), inp)
+        stdscr.clrtoeol()
         ch = stdscr.getch()
         if ch == 127 or ch == cur.KEY_BACKSPACE:
             inp=inp[:-1]
@@ -109,12 +117,16 @@ def minput(stdscr, r, c, prompt_string):
             return "<ESC>"
         else:
             letter =chr(ch)
-            if letter.isalnum() or letter in [' ','-','_',':','.','?','+']:
-                inp += letter 
+            if on_enter:
+                if letter.isalnum() or letter in [' ','-','_',':','.','?','+']:
+                    inp += letter 
+                else:
+                    cur.beep()
             else:
-                cur.beep()
-        stdscr.addstr(r, c+ len(prompt_string), inp)
-        stdscr.clrtoeol()
+                if ch in accept_on:
+                    inp += letter
+                else:
+                    cur.beep()
     cur.noecho()
     hide_cursor()
     return inp  
