@@ -27,6 +27,9 @@ theme_opts = {}
 theme_ranges = {}
 conf = {}
 nods = {}
+page = 0
+query = ""
+filters = {}
 
 TEXT_COLOR = 100
 ITEM_COLOR = 101
@@ -130,11 +133,12 @@ def add_remove_sels(d, art, ch):
     save_obj(d, "sels", "")
 
 
-def request(query, page = 1, size=40, filters = None):
+def request(p = 0):
      
-    page = int(page)
-    page -= 1
+    global page
 
+    page = int(p)
+    size = 15
     headers = {
         'Connection': 'keep-alive',
         'Accept': 'application/json',
@@ -164,8 +168,12 @@ def request(query, page = 1, size=40, filters = None):
     except requests.exceptions.RequestException as err:
         return [],("OOps: Something Else" + str(err))
 
-    return response.json()['searchResults']['results'],""
-    
+    try:
+        rsp = response.json()['searchResults']['results'],""
+    except:
+        return [], "Corrupt or no response...."
+    return rsp,""
+
 
 def show_results(articles, fid, mode = 'list'):
 
@@ -173,6 +181,8 @@ def show_results(articles, fid, mode = 'list'):
 
     if len(articles) == 0:
         return "No article was loaded!"
+    with open("articles.txt","w") as f:
+        print(articles, file = f)
     rows, cols = std.getmaxyx()
     ch = ''
     sels = load_obj("sels","")
@@ -366,12 +376,17 @@ def show_results(articles, fid, mode = 'list'):
                 start_row = pos[si] - 7 
             else:
                 start_row = 0
+        else:
+            _p = k // 15
+            all_pages = (N // 15) + 1
+            show_info("Enter) open PageDown) Next page  PageUp) Previous page  s) select   e) export")
+            print_there(0, cols - 10, "|" + str(_p + 1) +  " of " + str(all_pages), win_info, INFO_COLOR)
+
         text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
 
         ch = get_key(std)
         # this will stop the timer
 
-        clear_screen(win_info)
         if ch == ord('z'):
             if not sels:
                 show_err("No article was selected")
@@ -462,8 +477,6 @@ def show_results(articles, fid, mode = 'list'):
         if ch == ord('n'):
             if mode == 'd':
                 k += 1
-            else:
-                articles = request
         if ch == ord('k'):
             sc -= 1
             if sc >= 0:
@@ -501,7 +514,7 @@ def show_results(articles, fid, mode = 'list'):
             else:
                 cur.beep()
 
-        if k >= start + 15:
+        if k >= start + 15 and k < N:
             ch = cur.KEY_NPAGE
         if k < start:
             ch = "prev_pg"
@@ -518,6 +531,17 @@ def show_results(articles, fid, mode = 'list'):
                 si = min(si + 10, total_sents -1)
             else:
                 start += 15
+                if start > N - 15:
+                    show_info("Getting articles...")
+                    new_articles, ret = request(page + 1)
+                    # with open("tt.txt", "w") as f:
+                    #    print(str(new_articles), file =f)
+                    if len(new_articles) > 0 and ret == "":
+                        articles = articles + new_articles
+                        save_obj(articles, "last_results", "")
+                        N = len(articles)
+                    else:
+                        show_error(ret)
                 start = min(start, N - 15)
                 k = start
         elif ch == cur.KEY_HOME:
@@ -533,7 +557,9 @@ def show_results(articles, fid, mode = 'list'):
                 sc = sects_num -1
                 fc = total_frags  -1
             else:
-                k = start + 14
+                k = N -1 #start + 14
+                mod = 15 if N % 15 == 0 else N % 15
+                start = N - mod 
 
         if mode == 'd':
             sc = max(0, sc)
@@ -845,12 +871,17 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             # show_cursor()
             break;
         elif ch == ord('d') and "preset" in opts:
-            confirm = minput(win_info, 0, 1, "Are you sure you want to delete " + opts["preset"] + "? (y/n)")
+            if mode == 'm':
+                _preset = opts["preset"]
+            else:
+                _preset = ranges[sel][si]
+            confirm = minput(win_info, 0, 1, "Are you sure you want to delete " + _preset + "? (y/n)")
             if confirm == "y" or confirm == "Y":
-                del_obj(opts["preset"], "themes")
-                ranges["preset"].remove(opts["preset"])
+                del_obj(_preset, "themes")
+                ranges["preset"].remove(_preset)
                 new_preset = ranges["preset"][0] if len(ranges["preset"]) > 0 else "dark"
                 opts = load_preset(new_preset)
+                si = 0
                 last_preset = new_preset
                 refresh_menu(opts, menu_win, sel, ranges)
                 show_info(new_preset +  " was loaded")
@@ -889,7 +920,8 @@ def find(list, st, ch, default):
 
 def main(stdscr):
 
-    global theme_ranges, theme_opts, std, conf, nods
+    global theme_ranges, theme_opts, std, conf, nods, query, filters
+
 
     std = stdscr
     cur.start_color()
@@ -898,7 +930,7 @@ def main(stdscr):
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts = None # load_obj("query_opts")
+    opts = load_obj("query_opts", "")
     if opts is None:
         opts = {"search":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"", "sep":"","last results":"", "saved articles":"","sep":"", "text files":""}
     ranges = {
@@ -988,7 +1020,8 @@ def main(stdscr):
                 ret = ""
                 if ch == 'r':
                     show_info("Getting articles...")
-                    articles,ret = request(opts["search"], 1, 15 , filters)
+                    query = opts["search"]
+                    articles,ret = request(0)
                     fid = opts["search"] + '_' + opts["year"] + '_1_' + opts["conference"] + '_' + opts["task"] + '_' + opts["dataset"]
                     fid = fid.replace(' ','_')
                     fid = fid.replace('__','_')
