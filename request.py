@@ -378,8 +378,8 @@ def show_results(articles, fid, mode = 'list'):
                 start_row = 0
         else:
             _p = k // 15
-            all_pages = (N // 15) + 1
-            show_info("Enter) open PageDown) Next page  PageUp) Previous page  s) select   e) export")
+            all_pages = (N // 15) + (1 if N % 15 > 0 else 0) 
+            show_info("Enter) view article       PageDown) next page (load more...)     h) other shortkeys")
             print_there(0, cols - 10, "|" + str(_p + 1) +  " of " + str(all_pages), win_info, INFO_COLOR)
 
         text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
@@ -387,21 +387,35 @@ def show_results(articles, fid, mode = 'list'):
         ch = get_key(std)
         # this will stop the timer
 
-        if ch == ord('z'):
+        if ch == ord('h'):
+            show_info(('\n'
+                       ' s)          select an article\n'
+                       ' w)          save all or selected items\n'
+                       ' e)          export all or selected items\n'
+                       ' t)          change color theme\n'
+                       ' HOME)       go to the first item\n'
+                       ' END)        go to the last item\n'
+                       ' PageUp)     previous page\n'
+                       ' Arrow keys) next, previous article\n'
+                       ' q)          return back to the search menu\n'
+                       '\n\n Press any key to close ...'),
+                       bottom=False)
+            win_info.getch()
+        if ch == ord('w'):
             if not sels:
                 show_err("No article was selected")
             else:
                 sel_arts = []
                 count = 0
-
                 for a in articles:
                     count += 1
                     if a["id"] in sels:
                         fid += str(count)
                         sel_arts.append(a)
-                save_obj(sel_arts, fid, "articles")
-                articles = sel_arts
-                show_info("Selected articles were saved as " + fid)
+                fname = minput(win_info, 0, 1, "Save articles as:", default = fid) 
+                if fname != "<ESC>":
+                    save_obj(sel_arts, fname, "articles")
+                    show_info("Selected articles were saved as " + fname)
 
         if ch == ord('q') and mode == 'd':
             ch = 0
@@ -537,11 +551,14 @@ def show_results(articles, fid, mode = 'list'):
                     # with open("tt.txt", "w") as f:
                     #    print(str(new_articles), file =f)
                     if len(new_articles) > 0 and ret == "":
+                        if isinstance(new_articles, tuple):
+                            new_articles = new_articles[0]
                         articles = articles + new_articles
                         save_obj(articles, "last_results", "")
                         N = len(articles)
                     else:
-                        show_error(ret)
+                        #ret = textwrap.fill(ret[:200], initial_indent='', subsequent_indent='    ')
+                        show_err(ret[:200]+ "...", bottom = False)
                 start = min(start, N - 15)
                 k = start
         elif ch == cur.KEY_HOME:
@@ -593,7 +610,7 @@ def show_results(articles, fid, mode = 'list'):
             info = "s) save as   d) delete"
             _, theme_opts = show_menu(theme_opts, theme_ranges, "::Settings", info = info)
             save_obj(theme_opts, conf["theme"], "themes")
-        if ch == ord('w') or ch == ord('m'):
+        if ch == ord('e') or ch == ord('m'):
             merge = ch == 'm'
             if not sels:
                 show_err("No article was selected!! Select an article using s")
@@ -675,10 +692,13 @@ def get_sel(opts, mi):
     return list(opts)[mi], mi
 
 win_info = None
-def show_info(msg, color=INFO_COLOR):
+def show_info(msg, color=INFO_COLOR, bottom = True):
     global win_info
     rows, cols = std.getmaxyx()
-    win_info = cur.newwin(1, cols, rows-1,0) 
+    if bottom:
+        win_info = cur.newwin(1, cols, rows-1,0) 
+    else:
+        win_info = cur.newwin(rows //2, cols//2, rows//4,cols//4) 
     win_info.bkgd(' ', cur.color_pair(color)) # | cur.A_REVERSE)
     win_info.erase()
     print_there(0,1," {} ".format(msg), win_info, color)
@@ -687,8 +707,8 @@ def show_info(msg, color=INFO_COLOR):
 def show_msg(msg, color=INFO_COLOR):
    show_info(msg, color)
 
-def show_err(msg, color=ERR_COLOR):
-    show_msg(msg, color)
+def show_err(msg, color=ERR_COLOR, bottom = True):
+    show_info(msg, color, bottom)
     win_info.getch()
 
 def load_preset(new_preset):
@@ -780,27 +800,18 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                   mprint("...", sub_menu_win, cW)
               sub_menu_win.refresh()
 
-        if _help:
-            _help = False
-            clear_screen(menu_win)
-            fname = "ReadMe.md"
-            obj_file = Path(fname) 
-            if not obj_file.is_file():
-                cont = "ReadMe is missing! please refer to the project address on github..."
-            else:
-                with open("ReadMe.md", "r") as f:
-                    cont = f.read()
-            mprint(cont, menu_win)
-            show_info("Press any key to return ...")
-            a = std.getch()
-            refresh_menu(opts, menu_win, sel, ranges)
-            if info != "":
-                show_info(info)
-            ch = 'a'
         ch = get_key(std)
             
         if ch == ord("h"):
-            _help = not _help
+            show_info(('\n'
+                       ' Enter)        set or change a value \n'
+                       ' Arrow keys)   next, previous item\n'
+                       ' PageUp/Down)  First/Last item\n'
+                       ' o)            list saved articles \n'
+                       ' d)            delete from saved articles \n'
+                       '\n\n Press any key to close ...'),
+                       bottom=False)
+            win_info.getch()
         elif ch == cur.KEY_DOWN:
             if mode == "m":
                 mi += 1
@@ -875,7 +886,10 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 _preset = opts["preset"]
             else:
                 _preset = ranges[sel][si]
-            confirm = minput(win_info, 0, 1, "Are you sure you want to delete " + _preset + "? (y/n)")
+            confirm = minput(win_info, 0, 1, 
+                    "Are you sure you want to delete " + _preset + "? (y/n)",
+                    accept_on = ['y','Y','n','N'])
+
             if confirm == "y" or confirm == "Y":
                 del_obj(_preset, "themes")
                 ranges["preset"].remove(_preset)
@@ -885,6 +899,21 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 last_preset = new_preset
                 refresh_menu(opts, menu_win, sel, ranges)
                 show_info(new_preset +  " was loaded")
+        elif ch == ord('d') and "saved articles" in opts:
+            if mode == 'm':
+                item = opts["saved articles"]
+            else:
+                item = ranges[sel][si]
+            confirm = minput(win_info, 0, 1, 
+                    "Are you sure you want to delete " + item + "? (y/n)",
+                    accept_on = ['y','Y','n','N'])
+
+            if confirm == "y" or confirm == "Y":
+                del_obj(item, "articles")
+                ranges["saved articles"].remove(item)
+                new_item = ranges["saved articles"][0] if len(ranges["saved articles"]) > 0 else "None"
+                opts["saved articles"] = new_item
+                si = 0
 
         elif ch == ord('s') and "preset" in opts:
             fname = minput(win_info, 0, 1, "Save as:") 
@@ -899,7 +928,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             mi = list(opts.keys()).index(shortkeys[chr(ch)])
             mode = 's'
             st = ""
-        elif ch == ord('r') or ch == ord('l'): 
+        elif ch == ord('r') or ch == ord('l') or (ch == ord('s') and "search" in opts): 
             return ch, opts
         else:
             if mode == 's' and chr(ch).isdigit() and sel in ranges:
@@ -1007,7 +1036,8 @@ def main(stdscr):
     choice = ord('a')
     shortkeys = {"y":"year", "o":"saved articles", 'p':"text files"}
     while choice != ord('q'):
-        info = "s) search l) last results o) saved articles  h) help  q) quit"
+        info = "s) search l) open last results  h) other shortkeys         q) quit"
+
         
         choice, opts = show_menu(opts, ranges, shortkeys = shortkeys, info = info)
         ch = chr(choice)
@@ -1018,7 +1048,7 @@ def main(stdscr):
                     filters[k] = str(v)
             try:
                 ret = ""
-                if ch == 'r':
+                if ch == 's':
                     show_info("Getting articles...")
                     query = opts["search"]
                     articles,ret = request(0)
@@ -1027,6 +1057,8 @@ def main(stdscr):
                     fid = fid.replace('__','_')
                     fid = fid.replace('__','_')
                     if len(articles) > 0 and ret == "":
+                        if isinstance(articles, tuple):
+                            articles = articles[0]
                         save_obj(articles, "last_results", "")
                         ret = show_results(articles, fid)
                 elif ch == 'p':
@@ -1053,8 +1085,7 @@ def main(stdscr):
                              show_err("Unable to load the file....")
 
                 if ret:
-                    mprint(ret, std)
-                    std.getch()
+                    show_err(ret[:200]+ "...", bottom = False)
 
             except KeyboardInterrupt:
                 choice = ord('q')
