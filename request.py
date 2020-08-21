@@ -27,6 +27,7 @@ theme_opts = {}
 theme_ranges = {}
 conf = {}
 nods = {}
+times = {}
 page = 0
 query = ""
 filters = {}
@@ -48,12 +49,12 @@ color_map = {
         }
 nod_color = {
         "okay?":242,
-        "OK":148,
-        "PASS":178,
-        "Didn't get":218,
-        "Interesting!":248,
-        "So?":118,
-        "Got it!":98,
+        "yes":148,
+        "okay":178,
+        "didn't get":218,
+        "interesting!":248,
+        "so?":118,
+        "got it!":98,
         }
 
 cW = 7
@@ -132,6 +133,29 @@ def add_remove_sels(d, art, ch):
         del d[key]
     save_obj(d, "sels", "")
 
+def scale_color(rtime):
+    rtime = float(rtime)
+    rtime *= 4
+    if rtime == 0:
+        return TEXT_COLOR
+    elif rtime < 1:
+        return 119
+    elif rtime < 2:
+        return 107
+    elif rtime < 3:
+        return 76
+    elif rtime < 4:
+        return 71
+    elif rtime < 5:
+        return 65
+    elif rtime < 6:
+        return 58 
+    elif rtime < 7:
+        return 94
+    elif rtime < 8:
+        return 130
+    else:
+        return 161
 
 def request(p = 0):
      
@@ -217,6 +241,7 @@ def show_results(articles, fid, mode = 'list'):
     fc = 0
     cury = 0
     nod = {}
+    rtime = {}
     page_height = rows - 4
     scroll = 1
     while ch != ord('q'):
@@ -233,10 +258,15 @@ def show_results(articles, fid, mode = 'list'):
         k = min(k, N-1)
         pos = {} 
         art = articles[k]
+        cur_sent = ""
+        show_reading_time = True
         if art["id"] != art_id:
            if art_id != 0 and nod:
                nods[art_id] = nod
                save_obj(nods, "nods", "")
+           if art_id != 0 and rtime:
+               times[art_id] = rtime
+               save_obj(times, "times", "")
            art_id = art['id']
            # with open(art_id + ".txt", "w") as ff:
            #    print(art, file = ff)
@@ -244,6 +274,10 @@ def show_results(articles, fid, mode = 'list'):
                nod = nods[art_id]
            else:
                nod = {}
+           if art_id in times:
+               rtime = times[art_id]
+           else:
+               rtime = {}
            new_art = True
            new_sect = True
            old_sc = -1
@@ -331,16 +365,21 @@ def show_results(articles, fid, mode = 'list'):
                           hlcolor = SEL_ITEM_COLOR
                           if True:
                               for sent in frag_sents:
-                                  feedback = nod[fsn] if fsn in nod else "0"
+                                  feedback = nod[fsn] if fsn in nod else "okay?"
+                                  reading_time = rtime[fsn] if fsn in rtime else 0 
                                   f_color = SEL_ITEM_COLOR
                                   # f_color = nod_color[feedback]
                                   color = TEXT_COLOR
                                   sent = "\n".join(textwrap.wrap(sent, width -5))
+                                  if show_reading_time:
+                                      color = scale_color(reading_time)
                                   if fsn == si:
+                                      cur_sent = sent
                                       mprint(sent, text_win, hlcolor, end= " ")
                                   else:
                                       mprint(sent, text_win, color, end=" ")
-                                  mprint(feedback, text_win, f_color)
+                                  mprint(feedback, text_win, f_color, end=" ")
+                                  mprint(str(reading_time), text_win, f_color)
                                   pos[fsn],_ = text_win.getyx()
                                   fsn += 1
                           
@@ -386,7 +425,8 @@ def show_results(articles, fid, mode = 'list'):
 
         ch = get_key(std)
         # this will stop the timer
-
+        if ch == ord('r'):
+            show_reading_time = not show_reading_time
         if ch == ord('h'):
             show_info(('\n'
                        ' s)          select an article\n'
@@ -424,6 +464,9 @@ def show_results(articles, fid, mode = 'list'):
             if art_id != 0 and nod:
                nods[art_id] = nod
                save_obj(nods, "nods", "")
+            if art_id != 0 and rtime:
+               times[art_id] = rtime
+               save_obj(times, "times", "")
         if ch == ord('x'):
             fast_read = not fast_read
         if ch == ord('f') or ch == ord('s'):
@@ -454,24 +497,29 @@ def show_results(articles, fid, mode = 'list'):
             if art_id != 0 and nod:
                nods[art_id] = nod
                save_obj(nods, "nods", "")
+            if art_id != 0 and rtime:
+               times[art_id] = rtime
+               save_obj(times, "times", "")
 
         if mode == 'd' and (ch == cur.KEY_RIGHT or ch == cur.KEY_DOWN or chr(ch).isdigit()):
-#            if chr(ch) == '0':
-#                nod[si] = "So?"
-#            elif ch == cur.KEY_RIGHT or chr(ch) == 'o' or chr(ch) == '1':
-#                nod[si] = "OK"
-#            elif chr(ch) == "2" or chr(ch) == 'p':
-#                nod[si] = "PASS"
-#            elif chr(ch) == "3":
-#                nod[si] = "Interesting!"
-#            elif chr(ch) == "4":
-#                nod[si] = "Didn't get"
-#            elif chr(ch) == "5":
-#                nod[si] = "Got it!"
+            if chr(ch) == '0':
+                nod[si] = "so?"
+            elif ch == cur.KEY_DOWN or chr(ch) == 'o' or chr(ch) == '1':
+                nod[si] = "okay"
+            elif ch == cur.KEY_RIGHT or chr(ch) == "2":
+                nod[si] = "yes"
+            elif chr(ch) == "3":
+                nod[si] = "interesting!"
+            elif chr(ch) == "4" or chr(ch) == "-":
+                nod[si] = "didn't get"
+            elif chr(ch) == "5" or chr(ch) == "+":
+                nod[si] = "got it!"
 #            
             end_time = time.time()
-            reading_time = end_time - start_time 
-            nod[si] = str(reading_time)
+            cur_sent_length = len(cur_sent.split())
+            reading_time = (end_time - start_time)/cur_sent_length
+            reading_time = round(reading_time, 2)
+            rtime[si] = str(reading_time)
             if si + 1 < total_sents:
                 si += 1
             sents_num = art["sections"][sc]["fragments"][fi -1]["sents_num"] 
@@ -715,7 +763,7 @@ def load_preset(new_preset):
     opts = load_obj(new_preset,"themes")
     if opts == None:
         dark ={'preset': 'dark', 'text-color': '250', 'back-color': '234', 'item-color': '65', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28'}
-        light = {'preset': 'light', 'text-color': '32', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28'}
+        light = {'preset': 'light', 'text-color': '142', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28'}
         save_obj(dark, "dark", "themes")
         save_obj(light, "light", "themes")
         theme_ranges["preset"].append("dark")
@@ -949,7 +997,7 @@ def find(list, st, ch, default):
 
 def main(stdscr):
 
-    global theme_ranges, theme_opts, std, conf, nods, query, filters
+    global theme_ranges, theme_opts, std, conf, times, nods, query, filters
 
 
     std = stdscr
@@ -1004,8 +1052,11 @@ def main(stdscr):
     if conf is None:
         conf = {"theme":"default"}
     nods = load_obj("nods", "")
+    times = load_obj("times", "")
     if nods is None:
         nods = {}
+    if times is None:
+        times = {}
 
     colors = [str(y) for y in range(-1, cur.COLORS)]
     theme_ranges = {
