@@ -39,6 +39,9 @@ SEL_ITEM_COLOR = 103
 TITLE_COLOR = 104
 INFO_COLOR = 105
 ERR_COLOR = 106
+HL_COLOR = 107
+FAINT_COLOR = 108
+
 color_map = {
         "text-color":TEXT_COLOR, 
         "back-color":TEXT_COLOR, 
@@ -46,6 +49,8 @@ color_map = {
         "cur-item-color":CUR_ITEM_COLOR,
         "sel-item-color":SEL_ITEM_COLOR,
         "title-color":TITLE_COLOR,
+        "highlight-color":HL_COLOR,
+        "faint-color":FAINT_COLOR,
         }
 nod_color = {
         "okay?":242,
@@ -84,7 +89,34 @@ def reset_colors(theme, bg = None):
     cur.init_pair(SEL_ITEM_COLOR, int(theme["sel-item-color"]), bg)
     cur.init_pair(TITLE_COLOR, int(theme["title-color"]), bg)
     cur.init_pair(INFO_COLOR, bg, int(theme["text-color"]))
+    cur.init_pair(HL_COLOR, int(theme["highlight-color"]), bg)
+    cur.init_pair(FAINT_COLOR, int(theme["faint-color"]), bg)
     cur.init_pair(ERR_COLOR, cW, cR)
+
+
+def scale_color(rtime):
+    rtime = float(rtime)
+    rtime *= 4
+    if rtime == 0:
+        return 255
+    elif rtime < 1:
+        return 34
+    elif rtime < 2:
+        return 76
+    elif rtime < 3:
+        return 119
+    elif rtime < 4:
+        return 186
+    elif rtime < 5:
+        return 190
+    elif rtime < 6:
+        return 220 
+    elif rtime < 7:
+        return 208
+    elif rtime < 8:
+        return 202
+    else:
+        return 124
 
 def save_obj(obj, name, directory):
     if directory != "":
@@ -132,30 +164,6 @@ def add_remove_sels(d, art, ch):
     else: 
         del d[key]
     save_obj(d, "sels", "")
-
-def scale_color(rtime):
-    rtime = float(rtime)
-    rtime *= 4
-    if rtime == 0:
-        return TEXT_COLOR
-    elif rtime < 1:
-        return 119
-    elif rtime < 2:
-        return 107
-    elif rtime < 3:
-        return 76
-    elif rtime < 4:
-        return 71
-    elif rtime < 5:
-        return 65
-    elif rtime < 6:
-        return 58 
-    elif rtime < 7:
-        return 94
-    elif rtime < 8:
-        return 130
-    else:
-        return 161
 
 def request(p = 0):
      
@@ -238,12 +246,14 @@ def show_results(articles, fid, mode = 'list'):
     frags_text = ""
     art_id = -1
     si = 0
-    fc = 0
+    fc = 1
     cury = 0
     nod = {}
     rtime = {}
     page_height = rows - 4
     scroll = 1
+    show_reading_time = False
+    start_reading = True
     while ch != ord('q'):
         # clear_screen(text_win)
         text_win.clear()
@@ -258,8 +268,7 @@ def show_results(articles, fid, mode = 'list'):
         k = min(k, N-1)
         pos = {} 
         art = articles[k]
-        cur_sent = ""
-        show_reading_time = True
+        cur_sent = "1"
         if art["id"] != art_id:
            if art_id != 0 and nod:
                nods[art_id] = nod
@@ -282,25 +291,30 @@ def show_results(articles, fid, mode = 'list'):
            new_sect = True
            old_sc = -1
            sc = 0
-           fc = 0
+           fc = 1
            si = 0
            if nod:
                while si in nod and nod[si] != "okay?":
                    si += 1
-           fsn = 0
-           ffn = 0
+               si = max(si - 1, 0)
            frags_sents = {}
+           frags_sents[0] = (0, art["title"])
+           fsn = 1
+           ffn = 1
            for b in art["sections"]:
                frags_text = ""
                b['frags_offset'] = ffn
                b["sents_offset"] = fsn
+               frags_sents[ffn] = (fsn, b["title"])
+               ffn += 1
+               fsn += 1
                for c in b['fragments']:
                    text = c['text']
                    if text.strip() == "":
                        del b["fragments"][c]
                    else:
                        sents = split_into_sentences(text)
-                       frags_sents[ffn] = sents
+                       frags_sents[ffn] = (fsn, sents)
                        c['sents_offset'] = fsn 
                        c['sents_num'] = len(sents)
                        fsn += len(sents)
@@ -309,6 +323,7 @@ def show_results(articles, fid, mode = 'list'):
                b['frags_num'] = len(b["fragments"])
            total_sents = fsn 
            total_frags = ffn
+           si = min(si, total_sents -1)
 
 
         if sc != old_sc:
@@ -327,23 +342,37 @@ def show_results(articles, fid, mode = 'list'):
            sc = min(sc, sects_num)
            title = "\n".join(textwrap.wrap(a["title"], width)) # wrap at 60 characters
            top =  "["+str(k)+"] " + title
-           mprint(top,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
+           if si == 0:
+               mprint(top,  text_win, HL_COLOR, attr = cur.A_BOLD) 
+               cur_sent = top
+           else:
+               mprint(top,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
+           pos[0],_ = text_win.getyx()
            mprint("", text_win)
-           fsn = 0
-           ffn = 0
+           fsn = 1
+           ffn = 1
            for b in a["sections"]:
                fragments = b["fragments"]
                fnum = len(fragments)
+               _color = ITEM_COLOR
+               if fsn == si:
+                   cur_sent = b["title"]
+                   _color = HL_COLOR
                if sn == sc:
-                   sect_fc = fc - b["frags_offset"]
-                   sect_title = b["title"] + f"({sect_fc+1}/{fnum})" 
+                   sect_fc = fc - b["frags_offset"] + 1
+                   sect_title = b["title"] # + f"({sect_fc+1}/{fnum})" 
+                   if fsn != si:
+                       if art_id in sels and b["title"].lower() in sels[art_id]:
+                           _color = SEL_ITEM_COLOR
+                       else:
+                           _color = CUR_ITEM_COLOR
                else:
                    sect_title = b["title"]
-               if art_id in sels and b["title"].lower() in sels[art_id]:
-                   mprint(sect_title, text_win, SEL_ITEM_COLOR)
-               else:
-                   _color = CUR_ITEM_COLOR if sc == sn else ITEM_COLOR
-                   mprint(sect_title, text_win, _color, attr = cur.A_BOLD)
+
+               mprint(sect_title, text_win, _color, attr = cur.A_BOLD)
+               pos[fsn],_ = text_win.getyx()
+               ffn += 1
+               fsn += 1
                if expand == 0:
                    fsn += b["sents_num"] 
                    ffn += len(b["fragments"])
@@ -356,30 +385,34 @@ def show_results(articles, fid, mode = 'list'):
                        else:
                           if not ffn in frags_sents:
                               frag_sents = split_into_sentences(frag['text'])
-                              frags_sents[ffn] = frag_sents
+                              frags_sents[ffn] = (fsn, frag_sents)
                           else:
-                              frag_sents = frags_sents[ffn]
+                              frag_sents = frags_sents[ffn][1]
 
                           # if "level" in frag:
                              # color = frag["level"] % 250
-                          hlcolor = SEL_ITEM_COLOR
+                          hlcolor = HL_COLOR
                           if True:
                               for sent in frag_sents:
                                   feedback = nod[fsn] if fsn in nod else "okay?"
                                   reading_time = rtime[fsn] if fsn in rtime else 0 
                                   f_color = SEL_ITEM_COLOR
                                   # f_color = nod_color[feedback]
-                                  color = TEXT_COLOR
+                                  if start_reading:
+                                      color = FAINT_COLOR
+                                  else:
+                                      color = TEXT_COLOR
                                   sent = "\n".join(textwrap.wrap(sent, width -5))
-                                  if show_reading_time:
-                                      color = scale_color(reading_time)
                                   if fsn == si:
                                       cur_sent = sent
                                       mprint(sent, text_win, hlcolor, end= " ")
                                   else:
                                       mprint(sent, text_win, color, end=" ")
-                                  mprint(feedback, text_win, f_color, end=" ")
-                                  mprint(str(reading_time), text_win, f_color)
+                                  #mprint(feedback, text_win, f_color, end=" ")
+                                  if show_reading_time:
+                                      f_color = scale_color(reading_time)
+                                      mprint(str(reading_time), text_win, f_color)
+                                  mprint("", text_win, f_color)
                                   pos[fsn],_ = text_win.getyx()
                                   fsn += 1
                           
@@ -407,12 +440,11 @@ def show_results(articles, fid, mode = 'list'):
         if mode == 'd':
             sc = min(sc, sects_num)
             f_offset = art['sections'][sc]['frags_offset'] 
-            fi = fc - f_offset + 1            
-            offset = art["sections"][sc]["fragments"][fi - 1]["sents_offset"] 
-            show_info("sc:"+ str(sc) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset) +  " pos[0]:"+str(pos[0]))
+            offset = art["sections"][sc]["sents_offset"] 
+            show_info("sc:"+ str(sc) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
         if mode == 'd' and si in pos and not ch == ord('.') and not ch == ord(','):
-            if pos[si] > 7:    
-                start_row = pos[si] - 7 
+            if pos[si] > 3:    
+                start_row = pos[si] - 3 
             else:
                 start_row = 0
         else:
@@ -422,10 +454,11 @@ def show_results(articles, fid, mode = 'list'):
             print_there(0, cols - 10, "|" + str(_p + 1) +  " of " + str(all_pages), win_info, INFO_COLOR)
 
         text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
-
         ch = get_key(std)
         # this will stop the timer
         if ch == ord('r'):
+            start_reading = not start_reading
+        if ch == ord('z'):
             show_reading_time = not show_reading_time
         if ch == ord('h'):
             show_info(('\n'
@@ -520,17 +553,15 @@ def show_results(articles, fid, mode = 'list'):
             reading_time = (end_time - start_time)/cur_sent_length
             reading_time = round(reading_time, 2)
             rtime[si] = str(reading_time)
-            if si + 1 < total_sents:
+            if si  < total_sents - 1:
                 si += 1
-            sents_num = art["sections"][sc]["fragments"][fi -1]["sents_num"] 
-            if si > offset + sents_num - 1:
-                fc += 1
+            else:
+                cur.beep()
         if mode == 'd' and (ch == cur.KEY_LEFT or ch == cur.KEY_UP):
-            si -= 1
-            if si < 0: 
-                si = 0
-            if si < offset:
-                fc -= 1
+            if si > 0: 
+                si -= 1
+            else:
+                cur.beep()
 
         update_si = False
         if ch == ord('p'):
@@ -539,24 +570,33 @@ def show_results(articles, fid, mode = 'list'):
         if ch == ord('n'):
             if mode == 'd':
                 k += 1
-        if ch == ord('k'):
-            sc -= 1
-            if sc >= 0:
-                fc = art["sections"][sc]["frags_offset"]
-                update_si = True
         if ch == ord('j'):
-            sc += 1
-            if sc < sects_num:
+            if sc > 0:
+                sc -= 1
                 fc = art["sections"][sc]["frags_offset"]
                 update_si = True
-        if ch == ord('l') and mode == 'd': 
-                art["sections"][sc]["fragments"][fi -1]["level"] = random.randint(3, 9) 
-                fc += 1
+            else:
+                cur.beep()
+        if ch == ord('k'):
+            if sc < sects_num - 1:
+                sc += 1
+                fc = art["sections"][sc]["frags_offset"]
                 update_si = True
-        if ch == ord('h') and mode == 'd':
+            else:
+                cur.beep()
+        if ch == ord(';') and mode == 'd': 
+                if fc < total_frags - 1:
+                    fc += 1
+                    update_si = True
+                else:
+                    cur.beep()
+        if ch == ord('l') and mode == 'd':
             if mode == 'd':
-                fc -= 1
-                update_si = True
+                if fc > 0 :
+                    fc -= 1
+                    update_si = True
+                else:
+                    cur.beep()
 
         if ch == cur.KEY_DOWN:
             if mode == 'list':
@@ -611,54 +651,41 @@ def show_results(articles, fid, mode = 'list'):
                 k = start
         elif ch == cur.KEY_HOME:
             if mode == 'd':
-                sc = 0
-                fc = 0
                 si = 0
             else:
                 k = start
         elif ch == cur.KEY_END:
             if mode == 'd':
                 si = total_sents -1 
-                sc = sects_num -1
-                fc = total_frags  -1
             else:
                 k = N -1 #start + 14
                 mod = 15 if N % 15 == 0 else N % 15
                 start = N - mod 
 
         if mode == 'd':
-            sc = max(0, sc)
-            sc = min(sc, sects_num - 1)
-            f_offset = art["sections"][sc]["frags_offset"]
-            frags_num = art["sections"][sc]["frags_num"]
-            if fc < f_offset:
-                if sc > 0:
-                    sc -=1
-                else:
-                    sc = 0
-                    fc = 0
-                    cur.beep()
-            elif fc >= f_offset + frags_num:
-                if sc < sects_num - 1:
-                    sc +=1
-                else:
-                    fc -= 1
-                    cur.beep()
             if update_si:
-                f_offset = art['sections'][sc]['frags_offset'] 
-                fi = fc - f_offset             
-                si = art["sections"][sc]["fragments"][fi]["sents_offset"] 
+                fc = max(fc, 0)
+                fc = min(fc, total_frags -1)
+                si = frags_sents[fc][0]
+            c = 0 
+            while c < sects_num  and si >= art["sections"][c]["sents_offset"]:
+                c += 1
+            sc = max(c - 1,0)
+            f = 0
+            while f < total_frags and si >= frags_sents[f][0]:
+                f += 1
+            fc = max(f - 1,0)
 
             art['sections'][sc]['fc'] = fc 
         if ch == cur.KEY_ENTER or ch == 10:
                 mode = 'd'
-                fc = 0
+                fc = 1
                 sc = 0
         if ch == ord('t'):
             info = "s) save as   d) delete"
             _, theme_opts = show_menu(theme_opts, theme_ranges, "::Settings", info = info)
             save_obj(theme_opts, conf["theme"], "themes")
-        if ch == ord('e') or ch == ord('m'):
+        if ch == ord('x') or ch == ord('m'):
             merge = ch == 'm'
             if not sels:
                 show_err("No article was selected!! Select an article using s")
@@ -715,13 +742,13 @@ def refresh_menu(opts, menu_win, sel, ranges):
     for k, v in opts.items():
        colon = ":" # if not k in ranges else ">"
        if k == sel:
-           if k == "sep":
+           if k.startswith("sep"):
                print_there(row, col,  str(v) + colon,  menu_win, CUR_ITEM_COLOR)
            else:
                print_there(row, col, "{:<15}".format(k), menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
                print_there(row, gap, colon, menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
        else:
-           if k == "sep":
+           if k.startswith("sep"):
                print_there(row, col,  str(v) + colon, menu_win, TITLE_COLOR)
            else:
                print_there(row, col, "{:<15}".format(k), menu_win, ITEM_COLOR, attr = cur.A_BOLD)
@@ -729,7 +756,7 @@ def refresh_menu(opts, menu_win, sel, ranges):
 
        if "color" in k:
            print_there(row, col + 17, "{:^5}".format(str(v)), menu_win, color_map[k]) 
-       elif k != "sep":
+       elif not k.startswith("sep"):
            print_there(row, col + 17, "{}".format(v), menu_win, TEXT_COLOR)
 
        row += 1
@@ -749,6 +776,8 @@ def show_info(msg, color=INFO_COLOR, bottom = True):
         win_info = cur.newwin(rows //2, cols//2, rows//4,cols//4) 
     win_info.bkgd(' ', cur.color_pair(color)) # | cur.A_REVERSE)
     win_info.erase()
+    if len(msg) > 60:
+        msg = msg[:60] + "..."
     print_there(0,1," {} ".format(msg), win_info, color)
     win_info.clrtoeol()
 
@@ -760,10 +789,10 @@ def show_err(msg, color=ERR_COLOR, bottom = True):
     win_info.getch()
 
 def load_preset(new_preset):
-    opts = load_obj(new_preset,"themes")
+    opts = None # load_obj(new_preset,"themes")
     if opts == None:
-        dark ={'preset': 'dark', 'text-color': '250', 'back-color': '234', 'item-color': '65', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28'}
-        light = {'preset': 'light', 'text-color': '142', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28'}
+        dark ={'preset': 'dark',"sep1":"colors", 'text-color': '250', 'back-color': '234', 'item-color': '65', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'186'}
+        light = {'preset': 'light',"sep1":"colors", 'text-color': '142', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28', "sep2":"reading mode","faint-color":'251' ,"highlight-color":'119'}
         save_obj(dark, "dark", "themes")
         save_obj(light, "light", "themes")
         theme_ranges["preset"].append("dark")
@@ -884,7 +913,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             if sel in ranges:
                 si = min(si, len(ranges[sel]) - 1)
                 si = max(si, 0)
-            if sel == "sep":
+            if sel.startswith("sep"):
                 mi += 1
             elif mode == 'm':
                 mode = 's'
@@ -916,7 +945,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 mt = ""
                 si = 0
         elif ch == cur.KEY_RIGHT:
-            if sel == "sep":
+            if sel.startswith("sep"):
                 mi += 1
             else:
                 mode = 's'
@@ -1009,7 +1038,7 @@ def main(stdscr):
     filter_items = ["year", "conference", "dataset", "task"]
     opts = load_obj("query_opts", "")
     if opts is None:
-        opts = {"search":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"", "sep":"","last results":"", "saved articles":"","sep":"", "text files":""}
+        opts = {"search":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"", "sep1":"","last results":"", "saved articles":"","sep2":"", "text files":""}
     ranges = {
             "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
             "page":[str(y) for y in range(1,100)],
@@ -1067,6 +1096,8 @@ def main(stdscr):
             "cur-item-color":colors,
             "sel-item-color":colors,
             "title-color":colors,
+            "highlight-color":colors,
+            "faint-color":colors,
             }
 
     theme_opts = load_preset(conf["theme"]) 
