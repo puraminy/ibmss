@@ -296,7 +296,6 @@ def show_results(articles, fid, mode = 'list'):
            if nod:
                while si in nod and nod[si] != "okay?":
                    si += 1
-               si = max(si - 1, 0)
            frags_sents = {}
            frags_sents[0] = (0, art["title"])
            fsn = 1
@@ -323,7 +322,8 @@ def show_results(articles, fid, mode = 'list'):
                b['frags_num'] = len(b["fragments"])
            total_sents = fsn 
            total_frags = ffn
-           si = min(si, total_sents -1)
+           if si >= total_sents -1:
+               si = 0
 
 
         if sc != old_sc:
@@ -395,7 +395,7 @@ def show_results(articles, fid, mode = 'list'):
                           if True:
                               for sent in frag_sents:
                                   feedback = nod[fsn] if fsn in nod else "okay?"
-                                  reading_time = rtime[fsn] if fsn in rtime else 0 
+                                  reading_time = rtime[fsn][1] if fsn in rtime else 0 
                                   f_color = SEL_ITEM_COLOR
                                   # f_color = nod_color[feedback]
                                   if start_reading:
@@ -552,7 +552,13 @@ def show_results(articles, fid, mode = 'list'):
             cur_sent_length = len(cur_sent.split())
             reading_time = (end_time - start_time)/cur_sent_length
             reading_time = round(reading_time, 2)
-            rtime[si] = str(reading_time)
+            tries = 0
+            if si in rtime:
+                avg = rtime[si][1]
+                tries = rtime[si][0] + 1
+                reading_time = avg + 1/tries*(reading_time - avg)
+
+            rtime[si] = (tries, reading_time)
             if si  < total_sents - 1:
                 si += 1
             else:
@@ -1081,7 +1087,7 @@ def main(stdscr):
     if conf is None:
         conf = {"theme":"default"}
     nods = load_obj("nods", "")
-    times = load_obj("times", "")
+    times = None # load_obj("times", "")
     if nods is None:
         nods = {}
     if times is None:
