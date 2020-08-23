@@ -293,9 +293,6 @@ def show_results(articles, fid, mode = 'list'):
            sc = 0
            fc = 1
            si = 0
-           if nod:
-               while si in nod and nod[si] != "okay?":
-                   si += 1
            frags_sents = {}
            frags_sents[0] = (0, art["title"])
            fsn = 1
@@ -408,7 +405,9 @@ def show_results(articles, fid, mode = 'list'):
                                       mprint(sent, text_win, hlcolor, end= " ")
                                   else:
                                       mprint(sent, text_win, color, end=" ")
-                                  #mprint(feedback, text_win, f_color, end=" ")
+                                  if feedback != 'okay':
+                                      fline = "-"*20 + feedback + "-"*20
+                                      mprint(fline, text_win, FAINT_COLOR)
                                   if show_reading_time:
                                       f_color = scale_color(reading_time)
                                       mprint(str(reading_time), text_win, f_color)
@@ -443,8 +442,8 @@ def show_results(articles, fid, mode = 'list'):
             offset = art["sections"][sc]["sents_offset"] 
             show_info("sc:"+ str(sc) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
         if mode == 'd' and si in pos and not ch == ord('.') and not ch == ord(','):
-            if pos[si] > 3:    
-                start_row = pos[si] - 3 
+            if pos[si] > 10:    
+                start_row = pos[si] - 10 
             else:
                 start_row = 0
         else:
@@ -456,6 +455,13 @@ def show_results(articles, fid, mode = 'list'):
         text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
         ch = get_key(std)
         # this will stop the timer
+        if ch == ord('l'):
+           if nod:
+               si = 0
+               while si in nod and nod[si] != "okay?":
+                   si += 1
+               si = min(si, total_sents - 1)
+
         if ch == ord('r'):
             start_reading = not start_reading
         if ch == ord('z'):
