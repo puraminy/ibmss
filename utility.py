@@ -169,7 +169,7 @@ def rplit_into_sentences(text):
     except ImportError as e:
         return rplit_into_sentences(text)
 
-def split_into_sentences(text, debug = False, limit = 1):
+def split_into_sentences(text, debug = False, limit = 2):
     text = " " + text + "  "
     text = text.replace("\n"," ")
     text = re.sub(prefixes,"\\1<prd>",text)
