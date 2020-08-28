@@ -269,6 +269,7 @@ def show_results(articles, fid, mode = 'list'):
         pos = {} 
         art = articles[k]
         cur_sent = "1"
+        is_section = False
         if art["id"] != art_id:
            if art_id != 0 and nod:
                nods[art_id] = nod
@@ -338,22 +339,26 @@ def show_results(articles, fid, mode = 'list'):
            sc = max(sc, 0)
            sc = min(sc, sects_num)
            title = "\n".join(textwrap.wrap(a["title"], width)) # wrap at 60 characters
-           top =  "["+str(k)+"] " + title
+           pdfurl = a["pdfUrl"]
+           top =  "["+str(k)+"] " + title 
            if si == 0:
                mprint(top,  text_win, HL_COLOR, attr = cur.A_BOLD) 
                cur_sent = top
            else:
                mprint(top,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
+           mprint(pdfurl,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
            pos[0],_ = text_win.getyx()
            mprint("", text_win)
            fsn = 1
            ffn = 1
+           is_section = False
            for b in a["sections"]:
                fragments = b["fragments"]
                fnum = len(fragments)
                _color = ITEM_COLOR
                if fsn == si:
                    cur_sent = b["title"]
+                   is_section = True
                    _color = HL_COLOR
                if sn == sc:
                    sect_fc = fc - b["frags_offset"] + 1
@@ -395,7 +400,7 @@ def show_results(articles, fid, mode = 'list'):
                                   reading_time = rtime[fsn][1] if fsn in rtime else 0 
                                   f_color = SEL_ITEM_COLOR
                                   # f_color = nod_color[feedback]
-                                  if start_reading:
+                                  if start_reading and feedback == "yes":
                                       color = FAINT_COLOR
                                   else:
                                       color = TEXT_COLOR
@@ -405,9 +410,11 @@ def show_results(articles, fid, mode = 'list'):
                                       mprint(sent, text_win, hlcolor, end= " ")
                                   else:
                                       mprint(sent, text_win, color, end=" ")
-                                  if feedback != 'okay':
-                                      fline = "-"*20 + feedback + "-"*20
-                                      mprint(fline, text_win, FAINT_COLOR)
+                                  if feedback != 'okay' and feedback != 'okay?':
+                                      fline = "-"*20
+                                      #mprint("\n" + fline, text_win, FAINT_COLOR)
+                                      #mprint(feedback, text_win, f_color, end="")
+                                      #mprint(fline, text_win, FAINT_COLOR)
                                   if show_reading_time:
                                       f_color = scale_color(reading_time)
                                       mprint(str(reading_time), text_win, f_color)
@@ -453,8 +460,14 @@ def show_results(articles, fid, mode = 'list'):
             print_there(0, cols - 10, "|" + str(_p + 1) +  " of " + str(all_pages), win_info, INFO_COLOR)
 
         text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
-        ch = get_key(std)
+        if is_section and cur_sent.lower() in ['abstract', 'introduction','conclusion', 'related works']:
+            pass
+        else:
+            ch = get_key(std)
         # this will stop the timer
+        if ch == ord('u'):
+            with open(art["title"]  + ".txt","w") as f:
+                print(art, file = f)
         if ch == ord('l'):
            if nod:
                si = 0
@@ -788,8 +801,9 @@ def show_info(msg, color=INFO_COLOR, bottom = True):
         win_info = cur.newwin(rows //2, cols//2, rows//4,cols//4) 
     win_info.bkgd(' ', cur.color_pair(color)) # | cur.A_REVERSE)
     win_info.erase()
-    if len(msg) > 60:
-        msg = msg[:60] + "..."
+    if len(msg) > cols - 2:
+
+        msg = msg[:(cols - 5)] + "..."
     print_there(0,1," {} ".format(msg), win_info, color)
     win_info.clrtoeol()
 
@@ -803,7 +817,7 @@ def show_err(msg, color=ERR_COLOR, bottom = True):
 def load_preset(new_preset):
     opts = None # load_obj(new_preset,"themes")
     if opts == None:
-        dark ={'preset': 'dark',"sep1":"colors", 'text-color': '250', 'back-color': '234', 'item-color': '65', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'186'}
+        dark ={'preset': 'dark',"sep1":"colors", 'text-color': '247', 'back-color': '234', 'item-color': '71', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'153'}
         light = {'preset': 'light',"sep1":"colors", 'text-color': '142', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28', "sep2":"reading mode","faint-color":'251' ,"highlight-color":'119'}
         save_obj(dark, "dark", "themes")
         save_obj(light, "light", "themes")
@@ -842,6 +856,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
     row = 3 
     col = 5
     mt, st = "", ""
+    old_val = ""
     while ch != ord('q'):
         clear_screen(sub_menu_win)
         if info != "":
@@ -889,7 +904,8 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                   mprint("...", sub_menu_win, cW)
               sub_menu_win.refresh()
 
-        ch = get_key(std)
+        if not sel.startswith('sep'):
+            ch = get_key(std)
             
         if ch == ord("h"):
             show_info(('\n'
@@ -928,6 +944,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             if sel.startswith("sep"):
                 mi += 1
             elif mode == 'm':
+                old_val = opts[sel]
                 mode = 's'
                 st = ""
                 if sel in ranges:
@@ -956,15 +973,23 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 mode = 'm'    
                 mt = ""
                 si = 0
+                old_val = ""
         elif ch == cur.KEY_RIGHT:
             if sel.startswith("sep"):
                 mi += 1
             else:
+                old_val = opts[sel]
                 mode = 's'
                 st = ""
                 if sel in ranges:
                     si = ranges[sel].index(opts[sel])
         elif ch == cur.KEY_LEFT or ch == 27:
+            if old_val != "":
+                opts[sel] = old_val
+                refresh_menu(opts, menu_win, sel, ranges)
+                if "color" in sel:
+                    reset_colors(opts)
+            old_val = ""
             mode = 'm'
             mt = ""
         elif ch == ord('q'):
@@ -1015,6 +1040,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 refresh_menu(opts, menu_win, sel, ranges)
         elif chr(ch) in shortkeys:
             mi = list(opts.keys()).index(shortkeys[chr(ch)])
+            old_val = opts[sel]
             mode = 's'
             st = ""
         elif ch == ord('r') or ch == ord('l') or (ch == ord('s') and "search" in opts): 
