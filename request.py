@@ -460,10 +460,10 @@ def show_results(articles, fid, mode = 'list'):
             print_there(0, cols - 10, "|" + str(_p + 1) +  " of " + str(all_pages), win_info, INFO_COLOR)
 
         text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
-        if is_section and cur_sent.lower() in ['abstract', 'introduction','conclusion', 'related works']:
-            pass
-        else:
-            ch = get_key(std)
+        #if is_section and cur_sent.lower() in ['abstract', 'introduction','conclusion', 'related works']:
+        #    pass
+        #else:
+        ch = get_key(std)
         # this will stop the timer
         if ch == ord('u'):
             with open(art["title"]  + ".txt","w") as f:
@@ -582,11 +582,13 @@ def show_results(articles, fid, mode = 'list'):
                 si += 1
             else:
                 cur.beep()
+                si = total_sents - 1
         if mode == 'd' and (ch == cur.KEY_LEFT or ch == cur.KEY_UP):
             if si > 0: 
                 si -= 1
             else:
                 cur.beep()
+                si = 0
 
         update_si = False
         if ch == ord('p'):
@@ -602,6 +604,7 @@ def show_results(articles, fid, mode = 'list'):
                 update_si = True
             else:
                 cur.beep()
+                sc = 0
         if ch == ord('k'):
             if sc < sects_num - 1:
                 sc += 1
@@ -609,12 +612,14 @@ def show_results(articles, fid, mode = 'list'):
                 update_si = True
             else:
                 cur.beep()
+                sc = sects_num -1
         if ch == ord(';') and mode == 'd': 
                 if fc < total_frags - 1:
                     fc += 1
                     update_si = True
                 else:
                     cur.beep()
+                    fc = total_frags -1
         if ch == ord('l') and mode == 'd':
             if mode == 'd':
                 if fc > 0 :
@@ -622,6 +627,7 @@ def show_results(articles, fid, mode = 'list'):
                     update_si = True
                 else:
                     cur.beep()
+                    fc = 0
 
         if ch == cur.KEY_DOWN:
             if mode == 'list':
@@ -871,6 +877,9 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
               val = minput(menu_win,row + mi, col, "{:<15}".format(sel) + ": ") 
               if val != "<ESC>":
                   opts[sel] = val
+              else:
+                  opts[sel] = old_val
+                  old_val = ""
               mi += 1
               sel,mi = get_sel(opts, mi)
               refresh_menu(opts, menu_win, sel, ranges)
