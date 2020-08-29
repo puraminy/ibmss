@@ -777,18 +777,21 @@ def refresh_menu(opts, menu_win, sel, ranges):
                print_there(row, col,  str(v) + colon,  menu_win, CUR_ITEM_COLOR)
            else:
                print_there(row, col, "{:<15}".format(k), menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
-               print_there(row, gap, colon, menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
+               if v != "menu_item":
+                   print_there(row, gap, colon, menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
        else:
            if k.startswith("sep"):
                print_there(row, col,  str(v) + colon, menu_win, TITLE_COLOR)
            else:
                print_there(row, col, "{:<15}".format(k), menu_win, ITEM_COLOR, attr = cur.A_BOLD)
-               print_there(row, gap, colon, menu_win, ITEM_COLOR, attr = cur.A_BOLD)
+               if v != "menu_item":
+                   print_there(row, gap, colon, menu_win, ITEM_COLOR, attr = cur.A_BOLD)
 
-       if "color" in k:
-           print_there(row, col + 17, "{:^5}".format(str(v)), menu_win, color_map[k]) 
-       elif not k.startswith("sep"):
-           print_there(row, col + 17, "{}".format(v), menu_win, TEXT_COLOR)
+       if v != "menu_item":
+           if "color" in k:
+               print_there(row, col + 17, "{:^5}".format(str(v)), menu_win, color_map[k]) 
+           elif not k.startswith("sep"):
+               print_there(row, col + 17, "{}".format(v), menu_win, TEXT_COLOR)
 
        row += 1
 
@@ -870,8 +873,8 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
         sel,mi = get_sel(opts, mi)
         if mode == 'm':
             refresh_menu(opts, menu_win, sel, ranges)
-        if mode == 's':
-           if sel not in ranges:
+        if mode == 's' and opts[sel] != "menu_item":
+           if sel not in ranges: 
               # opts[sel]=""
               refresh_menu(opts, menu_win, sel, ranges)
               val = minput(menu_win,row + mi, col, "{:<15}".format(sel) + ": ") 
@@ -947,10 +950,12 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             elif sel in ranges:
                 si -= 10
         elif  ch == cur.KEY_ENTER or ch == 10 or ch == 13:
-            if sel in ranges:
+            if opts[sel] == "menu_item":
+                pass
+            elif sel in ranges:
                 si = min(si, len(ranges[sel]) - 1)
                 si = max(si, 0)
-            if sel.startswith("sep"):
+            elif sel.startswith("sep"):
                 mi += 1
             elif mode == 'm':
                 old_val = opts[sel]
@@ -984,9 +989,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 si = 0
                 old_val = ""
         elif ch == cur.KEY_RIGHT:
-            if sel.startswith("sep"):
-                mi += 1
-            else:
+            if opts[sel] != "menu_item":
                 old_val = opts[sel]
                 mode = 's'
                 st = ""
@@ -1083,7 +1086,7 @@ def main(stdscr):
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts = load_obj("query_opts", "")
+    opts =  None #load_obj("query_opts", "")
     if opts is None:
         opts = {"search":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"", "sep1":"","last results":"", "saved articles":"","sep2":"", "text files":""}
     ranges = {
