@@ -9,7 +9,7 @@ import shlex
 import re
 import textwrap
 import json
-from termcolor import colored
+import newspaper
 import getch as gh
 from utility import *
 import curses as cur
@@ -89,7 +89,7 @@ def reset_colors(theme, bg = None):
     cur.init_pair(SEL_ITEM_COLOR, int(theme["sel-item-color"]), bg)
     cur.init_pair(TITLE_COLOR, int(theme["title-color"]), bg)
     cur.init_pair(INFO_COLOR, bg, int(theme["text-color"]))
-    cur.init_pair(HL_COLOR, int(theme["highlight-color"]), bg)
+    cur.init_pair(HL_COLOR, bg, int(theme["highlight-color"]))
     cur.init_pair(FAINT_COLOR, int(theme["faint-color"]), bg)
     cur.init_pair(ERR_COLOR, cW, cR)
 
@@ -952,12 +952,12 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
         elif  ch == cur.KEY_ENTER or ch == 10 or ch == 13:
             if opts[sel] == "menu_item":
                 pass
-            elif sel in ranges:
+            if sel in ranges:
                 si = min(si, len(ranges[sel]) - 1)
                 si = max(si, 0)
-            elif sel.startswith("sep"):
+            if sel.startswith("sep"):
                 mi += 1
-            elif mode == 'm':
+            if mode == 'm':
                 old_val = opts[sel]
                 mode = 's'
                 st = ""
@@ -1055,7 +1055,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             old_val = opts[sel]
             mode = 's'
             st = ""
-        elif ch == ord('r') or ch == ord('l') or (ch == ord('s') and "search" in opts): 
+        elif ch == ord('w') or ch == ord('r') or ch == ord('l') or (ch == ord('s') and "search" in opts): 
             return ch, opts
         else:
             if mode == 's' and chr(ch).isdigit() and sel in ranges:
@@ -1086,9 +1086,9 @@ def main(stdscr):
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts =  None #load_obj("query_opts", "")
+    opts =  load_obj("query_opts", "")
     if opts is None:
-        opts = {"search":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"", "sep1":"","last results":"", "saved articles":"","sep2":"", "text files":""}
+        opts = {"search":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"", "sep1":"","last results":"", "saved articles":"","sep2":"", "text files":"", "site address":""}
     ranges = {
             "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
             "page":[str(y) for y in range(1,100)],
@@ -1174,7 +1174,7 @@ def main(stdscr):
         choice, opts = show_menu(opts, ranges, shortkeys = shortkeys, info = info)
         ch = chr(choice)
         save_obj(opts, "query_opts", "")
-        if ch in ['l', 'o', 's', 'r','p']:
+        if ch != 'q':
             for k,v in opts.items():
                 if k in filter_items and v and v != "All":
                     filters[k] = str(v)
@@ -1205,6 +1205,25 @@ def main(stdscr):
                          ret = show_results(articles, "last_results")
                      else:
                          show_err("Last results is missing....")
+                elif ch == 'w':
+                     site_addr = "https://" + opts["site address"] + "/"
+                     show_info("Gettign articles from " + site_addr)
+                     site  = newspaper.build(site_addr)
+                     show_info(str(len(site.articles)) +  " articles were detected...")
+                     std.getch()
+                     articles = []
+                     for a in site.articles:
+                         show_info(a.title)
+                         sleep(1)
+                         a.download()
+                         a.parse()
+                         art = [{"id":a.title, "title":a.title, "sections":[{"title":"all", "fragments":[{"text":a.text}]},{"title":"summary", "fragments":[{"text":a.summary}]}]}]
+                         articles.append(art)
+                     if articles != []:
+                         ret = show_results(articles, site_adr)
+                     else:
+                         show_err("No articles were found...")
+                     
                 elif ch == 'o':
                      selected = opts["saved articles"]
                      if selected == None:
