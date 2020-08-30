@@ -1208,19 +1208,17 @@ def main(stdscr):
                 elif ch == 'w':
                      site_addr = "https://" + opts["site address"] + "/"
                      show_info("Gettign articles from " + site_addr)
-                     site  = newspaper.build(site_addr)
+                     site  = newspaper.build(site_addr, memoize_articles=False)
                      show_info(str(len(site.articles)) +  " articles were detected...")
                      std.getch()
                      articles = []
-                     for a in site.articles:
-                         show_info(a.title)
-                         sleep(1)
+                     for a in site.articles[:2]:
                          a.download()
                          a.parse()
                          art = [{"id":a.title, "title":a.title, "sections":[{"title":"all", "fragments":[{"text":a.text}]},{"title":"summary", "fragments":[{"text":a.summary}]}]}]
                          articles.append(art)
                      if articles != []:
-                         ret = show_results(articles, site_adr)
+                         ret = show_results(articles, site_addr)
                      else:
                          show_err("No articles were found...")
                      
