@@ -307,15 +307,13 @@ def show_results(articles, fid, mode = 'list'):
                fsn += 1
                for c in b['fragments']:
                    text = c['text']
-                   if text.strip() == "":
-                       del b["fragments"][c]
-                   else:
-                       sents = split_into_sentences(text)
-                       frags_sents[ffn] = (fsn, sents)
-                       c['sents_offset'] = fsn 
-                       c['sents_num'] = len(sents)
-                       fsn += len(sents)
-                       ffn += 1
+                   # if text.strip() != "":
+                   sents = split_into_sentences(text)
+                   frags_sents[ffn] = (fsn, sents)
+                   c['sents_offset'] = fsn 
+                   c['sents_num'] = len(sents)
+                   fsn += len(sents)
+                   ffn += 1
                b["sents_num"] = fsn - b["sents_offset"]
                b['frags_num'] = len(b["fragments"])
            total_sents = fsn 
@@ -404,20 +402,22 @@ def show_results(articles, fid, mode = 'list'):
                                       color = FAINT_COLOR
                                   else:
                                       color = TEXT_COLOR
+                                  if feedback != 'okay' and feedback != 'okay?':
+                                      fline = "-"*20
+                                      if feedback == 'yes':
+                                          feedback = u'\u2713'
+                                      #mprint("\n" + fline, text_win, FAINT_COLOR)
+                                      mprint(feedback, text_win, f_color, end=" ")
+                                      #mprint(fline, text_win, FAINT_COLOR)
+                                  if show_reading_time:
+                                      f_color = scale_color(reading_time)
+                                      mprint(str(reading_time), text_win, f_color)
                                   sent = "\n".join(textwrap.wrap(sent, width -5))
                                   if fsn == si:
                                       cur_sent = sent
                                       mprint(sent, text_win, hlcolor, end= " ")
                                   else:
                                       mprint(sent, text_win, color, end=" ")
-                                  if feedback != 'okay' and feedback != 'okay?':
-                                      fline = "-"*20
-                                      #mprint("\n" + fline, text_win, FAINT_COLOR)
-                                      #mprint(feedback, text_win, f_color, end="")
-                                      #mprint(fline, text_win, FAINT_COLOR)
-                                  if show_reading_time:
-                                      f_color = scale_color(reading_time)
-                                      mprint(str(reading_time), text_win, f_color)
                                   mprint("", text_win, f_color)
                                   pos[fsn],_ = text_win.getyx()
                                   fsn += 1
@@ -568,7 +568,9 @@ def show_results(articles, fid, mode = 'list'):
                 nod[si] = "got it!"
 #            
             end_time = time.time()
-            cur_sent_length = len(cur_sent.split())
+            cur_sent_length = len(cur_sent.split()) 
+            if cur_sent_length == 0:
+                cur_sent_length = 0.01
             reading_time = (end_time - start_time)/cur_sent_length
             reading_time = round(reading_time, 2)
             tries = 0
@@ -824,7 +826,7 @@ def show_err(msg, color=ERR_COLOR, bottom = True):
     win_info.getch()
 
 def load_preset(new_preset):
-    opts = None # load_obj(new_preset,"themes")
+    opts = load_obj(new_preset,"themes")
     if opts == None:
         dark ={'preset': 'dark',"sep1":"colors", 'text-color': '247', 'back-color': '234', 'item-color': '71', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'153'}
         light = {'preset': 'light',"sep1":"colors", 'text-color': '142', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28', "sep2":"reading mode","faint-color":'251' ,"highlight-color":'119'}
@@ -1209,13 +1211,15 @@ def main(stdscr):
                      site_addr = "https://" + opts["site address"] + "/"
                      show_info("Gettign articles from " + site_addr)
                      site  = newspaper.build(site_addr, memoize_articles=False)
-                     show_info(str(len(site.articles)) +  " articles were detected...")
-                     std.getch()
                      articles = []
-                     for a in site.articles[:2]:
-                         a.download()
-                         a.parse()
-                         art = [{"id":a.title, "title":a.title, "sections":[{"title":"all", "fragments":[{"text":a.text}]},{"title":"summary", "fragments":[{"text":a.summary}]}]}]
+                     for a in site.articles:
+                         try:
+                             a.download()
+                             a.parse()
+                         except:
+                             continue
+                         #a.nlp()
+                         art = {"id":a.title,"pdfUrl":a.url, "title":a.title, "sections":[{"title":"all", "fragments":[{"text":a.text}]},{"title":"summary", "fragments":[{"text":a.summary}]}]}
                          articles.append(art)
                      if articles != []:
                          ret = show_results(articles, site_addr)
