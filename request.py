@@ -716,8 +716,8 @@ def show_results(articles, fid, mode = 'list'):
                 sc = 0
         if ch == ord('t'):
             info = "s) save as   d) delete"
-            _, theme_opts = show_menu(theme_opts, theme_ranges, "::Settings", info = info)
-            save_obj(theme_opts, conf["theme"], "themes")
+            _, theme_opts,_ = show_menu(theme_opts, theme_ranges, title="theme", info = info)
+            save_obj(theme_opts, conf["theme"], "theme")
         if ch == ord('x') or ch == ord('m'):
             merge = ch == 'm'
             if not sels:
@@ -779,17 +779,17 @@ def refresh_menu(opts, menu_win, sel, ranges):
                print_there(row, col,  str(v) + colon,  menu_win, CUR_ITEM_COLOR)
            else:
                print_there(row, col, "{:<15}".format(k), menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
-               if v != "menu_item":
+               if v != "button":
                    print_there(row, gap, colon, menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
        else:
            if k.startswith("sep"):
                print_there(row, col,  str(v) + colon, menu_win, TITLE_COLOR)
            else:
                print_there(row, col, "{:<15}".format(k), menu_win, ITEM_COLOR, attr = cur.A_BOLD)
-               if v != "menu_item":
+               if v != "button":
                    print_there(row, gap, colon, menu_win, ITEM_COLOR, attr = cur.A_BOLD)
 
-       if v != "menu_item":
+       if v != "button":
            if "color" in k:
                print_there(row, col + 17, "{:^5}".format(str(v)), menu_win, color_map[k]) 
            elif not k.startswith("sep"):
@@ -825,26 +825,26 @@ def show_err(msg, color=ERR_COLOR, bottom = True):
     show_info(msg, color, bottom)
     win_info.getch()
 
-def load_preset(new_preset):
-    opts = load_obj(new_preset,"themes")
-    if opts == None:
+def load_preset(new_preset, folder=""):
+    opts = load_obj(new_preset, folder)
+    if opts == None and folder == "theme":
         dark ={'preset': 'dark',"sep1":"colors", 'text-color': '247', 'back-color': '234', 'item-color': '71', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'153'}
         light = {'preset': 'light',"sep1":"colors", 'text-color': '142', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28', "sep2":"reading mode","faint-color":'251' ,"highlight-color":'119'}
-        save_obj(dark, "dark", "themes")
-        save_obj(light, "light", "themes")
+        save_obj(dark, "dark", "theme")
+        save_obj(light, "light", "theme")
         theme_ranges["preset"].append("dark")
         theme_ranges["preset"].append("light")
         new_preset = "dark"
         opts = dark
 
     opts["preset"] = new_preset
-    reset_colors(opts)
-    conf["theme"] = new_preset
+    if folder == "theme":
+        reset_colors(opts)
+    conf[folder] = new_preset
     save_obj(conf, "conf", "")
     return opts
 
-def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = ""):
-    mi = 0
+def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
     si = 0
     ch = 'a'
     mode = 'm'
@@ -870,12 +870,10 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
     old_val = ""
     while ch != ord('q'):
         clear_screen(sub_menu_win)
-        if info != "":
-            show_info(info)
         sel,mi = get_sel(opts, mi)
         if mode == 'm':
             refresh_menu(opts, menu_win, sel, ranges)
-        if mode == 's' and opts[sel] != "menu_item":
+        if mode == 's' and opts[sel] != "button":
            if sel not in ranges: 
               # opts[sel]=""
               refresh_menu(opts, menu_win, sel, ranges)
@@ -921,17 +919,7 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
         if not sel.startswith('sep'):
             ch = get_key(std)
             
-        if ch == ord("h"):
-            show_info(('\n'
-                       ' Enter)        set or change a value \n'
-                       ' Arrow keys)   next, previous item\n'
-                       ' PageUp/Down)  First/Last item\n'
-                       ' o)            list saved articles \n'
-                       ' d)            delete from saved articles \n'
-                       '\n\n Press any key to close ...'),
-                       bottom=False)
-            win_info.getch()
-        elif ch == cur.KEY_DOWN:
+        if ch == cur.KEY_DOWN:
             if mode == "m":
                 mi += 1
             elif sel in ranges:
@@ -952,8 +940,8 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
             elif sel in ranges:
                 si -= 10
         elif  ch == cur.KEY_ENTER or ch == 10 or ch == 13:
-            if opts[sel] == "menu_item":
-                pass
+            if opts[sel] == "button":
+              return sel, opts, mi 
             if sel in ranges:
                 si = min(si, len(ranges[sel]) - 1)
                 si = max(si, 0)
@@ -969,29 +957,19 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 opts[sel] = ranges[sel][si]
                 if "preset" in opts:
                     reset_colors(opts)
-                if sel == "text files":
-                    ch = ord('p')
-                    return ch, opts
-                elif sel == "saved articles":
-                    ch = ord('o')
-                    return ch, opts
-                elif sel == "last results":
-                    ch = ord('l')
-                    return ch, opts
-                elif sel == "preset":
-                    save_obj(opts, last_preset, "themes")
-                    new_preset = ranges[sel][si]
-                    opts = load_preset(new_preset)
+                if sel == "preset":
+                    save_obj(opts, last_preset, title)
+                    new_preset = opts[sel]
+                    opts = load_preset(new_preset, title)
                     last_preset = new_preset
                     refresh_menu(opts, menu_win, sel, ranges)
                     show_info(new_preset +  " was loaded")
-
                 mode = 'm'    
                 mt = ""
                 si = 0
                 old_val = ""
         elif ch == cur.KEY_RIGHT:
-            if opts[sel] != "menu_item":
+            if opts[sel] != "button":
                 old_val = opts[sel]
                 mode = 's'
                 st = ""
@@ -1009,27 +987,9 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
         elif ch == ord('q'):
             # show_cursor()
             break;
-        elif ch == ord('d') and "preset" in opts:
+        elif ch == ord('d'):
             if mode == 'm':
-                _preset = opts["preset"]
-            else:
-                _preset = ranges[sel][si]
-            confirm = minput(win_info, 0, 1, 
-                    "Are you sure you want to delete " + _preset + "? (y/n)",
-                    accept_on = ['y','Y','n','N'])
-
-            if confirm == "y" or confirm == "Y":
-                del_obj(_preset, "themes")
-                ranges["preset"].remove(_preset)
-                new_preset = ranges["preset"][0] if len(ranges["preset"]) > 0 else "dark"
-                opts = load_preset(new_preset)
-                si = 0
-                last_preset = new_preset
-                refresh_menu(opts, menu_win, sel, ranges)
-                show_info(new_preset +  " was loaded")
-        elif ch == ord('d') and "saved articles" in opts:
-            if mode == 'm':
-                item = opts["saved articles"]
+                item = opts[sel]
             else:
                 item = ranges[sel][si]
             confirm = minput(win_info, 0, 1, 
@@ -1037,16 +997,21 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                     accept_on = ['y','Y','n','N'])
 
             if confirm == "y" or confirm == "Y":
-                del_obj(item, "articles")
-                ranges["saved articles"].remove(item)
-                new_item = ranges["saved articles"][0] if len(ranges["saved articles"]) > 0 else "None"
-                opts["saved articles"] = new_item
+                del_obj(item, title)
+                ranges[sel].remove(item)
+                new_item = ranges[sel][0] if len(ranges[sel]) > 0 else "None"
+                opts[sel] = new_item
+                if sel == "preset":
+                    opts = load_preset(new_item, title)
+                    last_preset = new_item
+                    refresh_menu(opts, menu_win, sel, ranges)
+                    show_info(new_item +  " was loaded")
                 si = 0
 
         elif ch == ord('s') and "preset" in opts:
             fname = minput(win_info, 0, 1, "Save as:") 
             if fname != "<ESC>":
-                save_obj(opts, fname, "themes")
+                save_obj(opts, fname, title)
                 reset_colors(opts)
                 show_info(opts["preset"] +  " was saved as " + fname)
                 opts["preset"] = fname
@@ -1054,17 +1019,17 @@ def show_menu(opts, ranges, shortkeys = [], title = "::NodReader v1.0", info = "
                 refresh_menu(opts, menu_win, sel, ranges)
         elif chr(ch) in shortkeys:
             mi = list(opts.keys()).index(shortkeys[chr(ch)])
+            if opts[sel] == "button":
+                return ch, opts, mi
             old_val = opts[sel]
             mode = 's'
             st = ""
-        elif ch == ord('w') or ch == ord('r') or ch == ord('l') or (ch == ord('s') and "search" in opts): 
-            return ch, opts
         else:
             if mode == 's' and chr(ch).isdigit() and sel in ranges:
                 si,st = find(ranges[sel], st, chr(ch), si)
             else:
                 cur.beep()
-    return ch, opts
+    return ch, opts, mi
 
 def find(list, st, ch, default):
     str = st + ch
@@ -1077,7 +1042,6 @@ def find(list, st, ch, default):
     return default,""
 
 def main(stdscr):
-
     global theme_ranges, theme_opts, std, conf, times, nods, query, filters
 
 
@@ -1088,16 +1052,10 @@ def main(stdscr):
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts =  load_obj("query_opts", "")
+    opts =  None # load_obj("main_opts", "")
     if opts is None:
-        opts = {"search":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"", "sep1":"","last results":"", "saved articles":"","sep2":"", "text files":"", "site address":""}
+        opts = {"search articles":"button", "website articles":"button", "settings":"button", "help":"button", "last results":"", "saved articles":"","sep2":"", "text files":"", "site address":""}
     ranges = {
-            "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
-            "page":[str(y) for y in range(1,100)],
-            "page-size":[str(y) for y in range(30,100,10)], 
-            "task": ["All", "Reading Comprehension", "Machine Reading Comprehension","Sentiment Analysis", "Question Answering", "Transfer Learning","Natural Language Inference", "Computer Vision", "Machine Translation", "Text Classification", "Decision Making"],
-            "conference": ["All", "Arxiv", "ACL", "Workshops", "EMNLP", "IJCNLP", "NAACL", "LERC", "CL", "COLING", "BEA"],
-            "dataset": ["All","SQuAD", "RACE", "Social Media", "TriviaQA", "SNLI", "GLUE", "Image Net", "MS Marco", "TREC", "News QA" ],
             "last results":["None"],
             "saved articles":["None"],
             "text files":["None"],
@@ -1152,7 +1110,7 @@ def main(stdscr):
             "faint-color":colors,
             }
 
-    theme_opts = load_preset(conf["theme"]) 
+    theme_opts = load_preset(conf["theme"], "theme") 
     # mprint(str(theme_opts),std)
     # std.getch()
 
@@ -1167,14 +1125,57 @@ def main(stdscr):
     #os.environ.setdefault('ESCDELAY', '25')
     #ESCDELAY = 25
     clear_screen(std)
-    choice = ord('a')
-    shortkeys = {"y":"year", "o":"saved articles", 'p':"text files"}
-    while choice != ord('q'):
+    ch = 'a'
+    shortkeys = {"o":"saved articles", 'p':"text files"}
+    mi = 0
+    while ch != 'q':
         info = "s) search l) open last results  h) other shortkeys         q) quit"
+        show_info(info)
+        ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi)
+        if type(ch) is int:
+            ch = chr(ch)
+        save_obj(opts, "main_opts", "")
+        if ch == "search articles":
+            search()
+        if ch == 'h' or ch == "help":
+            show_info(('\n'
+                       ' Enter)        set or change a value \n'
+                       ' Arrow keys)   next, previous item\n'
+                       ' PageUp/Down)  First/Last item\n'
+                       ' o)            list saved articles \n'
+                       ' d)            delete from saved articles \n'
+                       '\n\n Press any key to close ...'),
+                       bottom=False)
+            win_info.getch()
 
-        
-        choice, opts = show_menu(opts, ranges, shortkeys = shortkeys, info = info)
-        ch = chr(choice)
+def search():
+    filters = {}
+    now = datetime.datetime.now()
+    filter_items = ["year", "conference", "dataset", "task"]
+    opts =  None #load_obj("query_opts", "")
+    if opts is None:
+        opts = {"keywords":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"","sep1":"", "search":"button"}
+    ranges = {
+            "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
+            "task": ["All", "Reading Comprehension", "Machine Reading Comprehension","Sentiment Analysis", "Question Answering", "Transfer Learning","Natural Language Inference", "Computer Vision", "Machine Translation", "Text Classification", "Decision Making"],
+            "conference": ["All", "Arxiv", "ACL", "Workshops", "EMNLP", "IJCNLP", "NAACL", "LERC", "CL", "COLING", "BEA"],
+            "dataset": ["All","SQuAD", "RACE", "Social Media", "TriviaQA", "SNLI", "GLUE", "Image Net", "MS Marco", "TREC", "News QA" ],
+            }
+
+    for opt in opts:
+       if opt in ranges:
+           opts[opt] = ranges[opt][0]
+    clear_screen(std)
+    ch = 'a'
+    shortkeys = {"y":"year", "s":"search"}
+    mi = 0
+    while ch != 'q':
+        info = "s) search l) open last results  h) other shortkeys         q) quit"
+        show_info(info)
+        ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi)
+
+        if type(ch) is int: 
+            ch = chr(ch)
         save_obj(opts, "query_opts", "")
         if ch != 'q':
             for k,v in opts.items():
@@ -1182,11 +1183,11 @@ def main(stdscr):
                     filters[k] = str(v)
             try:
                 ret = ""
-                if ch == 's':
+                if ch == 's' or 'search':
                     show_info("Getting articles...")
-                    query = opts["search"]
+                    query = opts["keywords"]
                     articles,ret = request(0)
-                    fid = opts["search"] + '_' + opts["year"] + '_1_' + opts["conference"] + '_' + opts["task"] + '_' + opts["dataset"]
+                    fid = opts["keywords"] + '_' + opts["year"] + '_1_' + opts["conference"] + '_' + opts["task"] + '_' + opts["dataset"]
                     fid = fid.replace(' ','_')
                     fid = fid.replace('__','_')
                     fid = fid.replace('__','_')
@@ -1210,7 +1211,13 @@ def main(stdscr):
                 elif ch == 'w':
                      site_addr = "https://" + opts["site address"] + "/"
                      show_info("Gettign articles from " + site_addr)
-                     site  = newspaper.build(site_addr, memoize_articles=False)
+                     config = newspaper.Config()
+                     config.memoize_articles = False
+                     config.fetch_images = False
+                     config.follow_meta_refresh = True
+                     site  = newspaper.Source(site_addr, config)
+                     site.download()
+                     site.generate_articles()
                      articles = []
                      for a in site.articles:
                          try:
