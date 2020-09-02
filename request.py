@@ -15,7 +15,7 @@ from utility import *
 import curses as cur
 from curses import wrapper
 from pathlib import Path
-
+from urllib.parse import urlparse
 from appdirs import *
 
 
@@ -89,7 +89,10 @@ def reset_colors(theme, bg = None):
     cur.init_pair(SEL_ITEM_COLOR, int(theme["sel-item-color"]), bg)
     cur.init_pair(TITLE_COLOR, int(theme["title-color"]), bg)
     cur.init_pair(INFO_COLOR, bg, int(theme["text-color"]))
-    cur.init_pair(HL_COLOR, bg, int(theme["highlight-color"]))
+    if theme["inverse-highlight"] == "True":
+        cur.init_pair(HL_COLOR, bg, int(theme["highlight-color"]))
+    else:
+        cur.init_pair(HL_COLOR, int(theme["highlight-color"]), bg)
     cur.init_pair(FAINT_COLOR, int(theme["faint-color"]), bg)
     cur.init_pair(ERR_COLOR, cW, cR)
 
@@ -246,6 +249,7 @@ def show_results(articles, fid, mode = 'list'):
     frags_text = ""
     art_id = -1
     si = 0
+    bmark = 0
     fc = 1
     cury = 0
     nod = {}
@@ -303,8 +307,9 @@ def show_results(articles, fid, mode = 'list'):
                b['frags_offset'] = ffn
                b["sents_offset"] = fsn
                frags_sents[ffn] = (fsn, b["title"])
-               ffn += 1
-               fsn += 1
+               if b["title"].lower() != "all":
+                   ffn += 1
+                   fsn += 1
                for c in b['fragments']:
                    text = c['text']
                    # if text.strip() != "":
@@ -369,10 +374,11 @@ def show_results(articles, fid, mode = 'list'):
                else:
                    sect_title = b["title"]
 
-               mprint(sect_title, text_win, _color, attr = cur.A_BOLD)
-               pos[fsn],_ = text_win.getyx()
-               ffn += 1
-               fsn += 1
+               if sect_title != "all":
+                   mprint(sect_title, text_win, _color, attr = cur.A_BOLD)
+                   pos[fsn],_ = text_win.getyx()
+                   ffn += 1
+                   fsn += 1
                if expand == 0:
                    fsn += b["sents_num"] 
                    ffn += len(b["fragments"])
@@ -413,7 +419,7 @@ def show_results(articles, fid, mode = 'list'):
                                       f_color = scale_color(reading_time)
                                       mprint(str(reading_time), text_win, f_color)
                                   sent = "\n".join(textwrap.wrap(sent, width -5))
-                                  if fsn == si:
+                                  if fsn >= bmark and fsn <= si:
                                       cur_sent = sent
                                       mprint(sent, text_win, hlcolor, end= " ")
                                   else:
@@ -457,7 +463,7 @@ def show_results(articles, fid, mode = 'list'):
             _p = k // 15
             all_pages = (N // 15) + (1 if N % 15 > 0 else 0) 
             show_info("Enter) view article       PageDown) next page (load more...)     h) other shortkeys")
-            print_there(0, cols - 10, "|" + str(_p + 1) +  " of " + str(all_pages), win_info, INFO_COLOR)
+            print_there(0, cols - 15, "|" + str(N) + "|" + str(_p + 1) +  " of " + str(all_pages), win_info, INFO_COLOR)
 
         text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
         #if is_section and cur_sent.lower() in ['abstract', 'introduction','conclusion', 'related works']:
@@ -553,20 +559,24 @@ def show_results(articles, fid, mode = 'list'):
                times[art_id] = rtime
                save_obj(times, "times", "")
 
-        if mode == 'd' and (ch == cur.KEY_RIGHT or ch == cur.KEY_DOWN or chr(ch).isdigit()):
-            if chr(ch) == '0':
-                nod[si] = "so?"
-            elif ch == cur.KEY_DOWN or chr(ch) == 'o' or chr(ch) == '1':
-                nod[si] = "okay"
+        if mode == 'd' and (ch == cur.KEY_LEFT or ch == cur.KEY_RIGHT or ch == cur.KEY_DOWN or chr(ch).isdigit()):
+            _nod = nod[si] if si in nod else "okay?"
+            if chr(ch) == '0' or ch == cur.KEY_LEFT:
+                _nod = "so?"
+            elif chr(ch) == 'o' or chr(ch) == '1':
+                _nod = "okay"
             elif ch == cur.KEY_RIGHT or chr(ch) == "2":
-                nod[si] = "yes"
+                _nod = "yes"
             elif chr(ch) == "3":
-                nod[si] = "interesting!"
+                _nod = "interesting!"
             elif chr(ch) == "4" or chr(ch) == "-":
-                nod[si] = "didn't get"
+                _nod = "didn't get"
             elif chr(ch) == "5" or chr(ch) == "+":
-                nod[si] = "got it!"
+                _nod = "got it!"
 #            
+            for ii in range(bmark, si +1):
+                nod[ii] = _nod
+
             end_time = time.time()
             cur_sent_length = len(cur_sent.split()) 
             if cur_sent_length == 0:
@@ -582,10 +592,12 @@ def show_results(articles, fid, mode = 'list'):
             rtime[si] = (tries, reading_time)
             if si  < total_sents - 1:
                 si += 1
+                if ch != cur.KEY_DOWN:
+                    bmark = si
             else:
                 cur.beep()
                 si = total_sents - 1
-        if mode == 'd' and (ch == cur.KEY_LEFT or ch == cur.KEY_UP):
+        if mode == 'd' and ch == cur.KEY_UP:
             if si > 0: 
                 si -= 1
             else:
@@ -710,13 +722,15 @@ def show_results(articles, fid, mode = 'list'):
             fc = max(f - 1,0)
 
             art['sections'][sc]['fc'] = fc 
+            if si < bmark:
+                bmark = si
         if ch == cur.KEY_ENTER or ch == 10:
                 mode = 'd'
                 fc = 1
                 sc = 0
         if ch == ord('t'):
             info = "s) save as   d) delete"
-            _, theme_opts,_ = show_menu(theme_opts, theme_ranges, title="theme", info = info)
+            _, theme_opts,_ = show_menu(theme_opts, theme_ranges, title="theme")
             save_obj(theme_opts, conf["theme"], "theme")
         if ch == ord('x') or ch == ord('m'):
             merge = ch == 'm'
@@ -766,34 +780,39 @@ def show_results(articles, fid, mode = 'list'):
             ch = get_key(std)
     return "" 
 
-def refresh_menu(opts, menu_win, sel, ranges):
+def refresh_menu(opts, menu_win, sel, ranges, shortkeys):
     global clG
     clear_screen(menu_win)
     row = 3 
     col = 5
-    gap = col + 15
+    _m = max([len(x) for x in opts.keys()]) + 5  
+    gap = col + _m
     for k, v in opts.items():
        colon = ":" # if not k in ranges else ">"
+       key = k
+       if k in shortkeys.values():
+           sk = list(shortkeys.keys())[list(shortkeys.values()).index(k)]
+           key = sk + ") " + k
        if k == sel:
            if k.startswith("sep"):
                print_there(row, col,  str(v) + colon,  menu_win, CUR_ITEM_COLOR)
            else:
-               print_there(row, col, "{:<15}".format(k), menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
+               print_there(row, col, "{:<{}}".format(key, _m), menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
                if v != "button":
                    print_there(row, gap, colon, menu_win, CUR_ITEM_COLOR, attr = cur.A_BOLD)
        else:
            if k.startswith("sep"):
                print_there(row, col,  str(v) + colon, menu_win, TITLE_COLOR)
            else:
-               print_there(row, col, "{:<15}".format(k), menu_win, ITEM_COLOR, attr = cur.A_BOLD)
+               print_there(row, col, "{:<{}}".format(key, _m), menu_win, ITEM_COLOR, attr = cur.A_BOLD)
                if v != "button":
                    print_there(row, gap, colon, menu_win, ITEM_COLOR, attr = cur.A_BOLD)
 
        if v != "button":
            if "color" in k:
-               print_there(row, col + 17, "{:^5}".format(str(v)), menu_win, color_map[k]) 
+               print_there(row, col + _m + 2, "{:^5}".format(str(v)), menu_win, color_map[k]) 
            elif not k.startswith("sep"):
-               print_there(row, col + 17, "{}".format(v), menu_win, TEXT_COLOR)
+               print_there(row, col + _m + 2, "{}".format(v), menu_win, TEXT_COLOR)
 
        row += 1
 
@@ -828,12 +847,11 @@ def show_err(msg, color=ERR_COLOR, bottom = True):
 def load_preset(new_preset, folder=""):
     opts = load_obj(new_preset, folder)
     if opts == None and folder == "theme":
-        dark ={'preset': 'dark',"sep1":"colors", 'text-color': '247', 'back-color': '234', 'item-color': '71', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'153'}
-        light = {'preset': 'light',"sep1":"colors", 'text-color': '142', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28', "sep2":"reading mode","faint-color":'251' ,"highlight-color":'119'}
+        dark ={'preset': 'dark',"sep1":"colors", 'text-color': '247', 'back-color': '234', 'item-color': '71', 'cur-item-color': '101', 'sel-item-color': '148', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'153', "inverse-highlight":"True"}
+        light = {'preset': 'light',"sep1":"colors", 'text-color': '142', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28', "sep2":"reading mode","faint-color":'251' ,"highlight-color":'119', "inverse-highlight":"True"}
         save_obj(dark, "dark", "theme")
         save_obj(light, "light", "theme")
-        theme_ranges["preset"].append("dark")
-        theme_ranges["preset"].append("light")
+        theme_ranges["preset"] = ["dark", "light"]
         new_preset = "dark"
         opts = dark
 
@@ -869,15 +887,17 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
     mt, st = "", ""
     old_val = ""
     while ch != ord('q'):
-        clear_screen(sub_menu_win)
         sel,mi = get_sel(opts, mi)
-        if mode == 'm':
-            refresh_menu(opts, menu_win, sel, ranges)
+        if not sel.startswith("sep"):
+            clear_screen(sub_menu_win)
+            if mode == 'm':
+                refresh_menu(opts, menu_win, sel, ranges, shortkeys)
         if mode == 's' and opts[sel] != "button":
            if sel not in ranges: 
               # opts[sel]=""
-              refresh_menu(opts, menu_win, sel, ranges)
-              val = minput(menu_win,row + mi, col, "{:<15}".format(sel) + ": ") 
+              refresh_menu(opts, menu_win, sel, ranges, shortkeys)
+              _m = max([len(x) for x in opts.keys()]) + 5  
+              val = minput(menu_win,row + mi, col, "{:<{}}".format(sel,_m) + ": ") 
               if val != "<ESC>":
                   opts[sel] = val
               else:
@@ -885,7 +905,7 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
                   old_val = ""
               mi += 1
               sel,mi = get_sel(opts, mi)
-              refresh_menu(opts, menu_win, sel, ranges)
+              refresh_menu(opts, menu_win, sel, ranges, shortkeys)
               mode = 'm'
               mt = ""
            else:
@@ -962,8 +982,10 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
                     new_preset = opts[sel]
                     opts = load_preset(new_preset, title)
                     last_preset = new_preset
-                    refresh_menu(opts, menu_win, sel, ranges)
+                    refresh_menu(opts, menu_win, sel, ranges, shortkeys)
                     show_info(new_preset +  " was loaded")
+                if sel in shortkeys.values():
+                    return sel, opts, mi
                 mode = 'm'    
                 mt = ""
                 si = 0
@@ -978,7 +1000,7 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
         elif ch == cur.KEY_LEFT or ch == 27:
             if old_val != "":
                 opts[sel] = old_val
-                refresh_menu(opts, menu_win, sel, ranges)
+                refresh_menu(opts, menu_win, sel, ranges, shortkeys)
                 if "color" in sel:
                     reset_colors(opts)
             old_val = ""
@@ -999,13 +1021,16 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
             if confirm == "y" or confirm == "Y":
                 del_obj(item, title)
                 ranges[sel].remove(item)
+                save_obj(ranges[sel],sel,title)
                 new_item = ranges[sel][0] if len(ranges[sel]) > 0 else "None"
                 opts[sel] = new_item
                 if sel == "preset":
                     opts = load_preset(new_item, title)
                     last_preset = new_item
-                    refresh_menu(opts, menu_win, sel, ranges)
+                    refresh_menu(opts, menu_win, sel, ranges, shortkeys)
                     show_info(new_item +  " was loaded")
+                else:
+                    show_info(item +  " was deleted")
                 si = 0
 
         elif ch == ord('s') and "preset" in opts:
@@ -1016,11 +1041,13 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
                 show_info(opts["preset"] +  " was saved as " + fname)
                 opts["preset"] = fname
                 ranges["preset"].append(fname)
-                refresh_menu(opts, menu_win, sel, ranges)
+                last_preset = fname
+                refresh_menu(opts, menu_win, sel, ranges, shortkeys)
         elif chr(ch) in shortkeys:
             mi = list(opts.keys()).index(shortkeys[chr(ch)])
+            sel,mi = get_sel(opts, mi)
             if opts[sel] == "button":
-                return ch, opts, mi
+                return sel, opts, mi
             old_val = opts[sel]
             mode = 's'
             st = ""
@@ -1054,11 +1081,10 @@ def main(stdscr):
     filter_items = ["year", "conference", "dataset", "task"]
     opts =  None # load_obj("main_opts", "")
     if opts is None:
-        opts = {"search articles":"button", "website articles":"button", "settings":"button", "help":"button", "last results":"", "saved articles":"","sep2":"", "text files":"", "site address":""}
+        opts = {"search articles":"button", "website articles":"button", "settings":"button", "help":"button", "last results":"", "saved articles":"","sep2":"", "text files":"button"}
     ranges = {
             "last results":["None"],
             "saved articles":["None"],
-            "text files":["None"],
             }
 
     last_results_file = user_data_dir(appname, appauthor) + "/last_results.pkl"
@@ -1079,11 +1105,6 @@ def main(stdscr):
     else:
         ranges["saved articles"] = saved_articles
 
-    text_files =  [Path(f).name for f in Path(".").glob('*.txt') if f.is_file()]
-    if not text_files:
-        ranges["text files"] =["None"] 
-    else:
-        ranges["text files"] = text_files
     for opt in opts:
        if opt in ranges:
            opts[opt] = ranges[opt][0]
@@ -1108,13 +1129,14 @@ def main(stdscr):
             "title-color":colors,
             "highlight-color":colors,
             "faint-color":colors,
+            "inverse-highlight":["True", "False"],
             }
 
     theme_opts = load_preset(conf["theme"], "theme") 
     # mprint(str(theme_opts),std)
     # std.getch()
 
-    themes_dir = user_data_dir(appname, appauthor) + "/themes"
+    themes_dir = user_data_dir(appname, appauthor) + "/theme"
     saved_themes =  [Path(f).stem for f in Path(themes_dir).glob('*') if f.is_file()]
     if not saved_themes:
         theme_ranges["preset"] =["default"] 
@@ -1126,7 +1148,7 @@ def main(stdscr):
     #ESCDELAY = 25
     clear_screen(std)
     ch = 'a'
-    shortkeys = {"o":"saved articles", 'p':"text files"}
+    shortkeys = {"l":"last results","w":"website articles", "o":"saved articles", 'p':"text files"}
     mi = 0
     while ch != 'q':
         info = "s) search l) open last results  h) other shortkeys         q) quit"
@@ -1147,6 +1169,122 @@ def main(stdscr):
                        '\n\n Press any key to close ...'),
                        bottom=False)
             win_info.getch()
+        elif ch == 'text files':
+            text_files =  [Path(f).name for f in Path(".").glob('*.txt') if f.is_file()]
+            articles = []
+            for text in text_files:
+                with open(text, "r") as f:
+                    data = f.read()
+                art = {"id":text, "pdfUrl":text, "title":text, "sections":[{"title":"all", "fragments":[{"text":data}]}]}
+                articles.append(art)
+            ret = show_results(articles, text)
+        elif ch == 'l' or ch == "last results":
+             articles = load_obj("last_results", "")
+             if articles != None:
+                 ret = show_results(articles, "last_results")
+             else:
+                 show_err("Last results is missing....")
+        elif ch == 'w' or ch == "website articles":
+             website()
+        elif ch == 'o' or ch == "saved articles":
+             selected = opts["saved articles"]
+             if selected == None:
+                 show_err("Please select articles to load")
+             else:
+                 articles = load_obj(selected, "articles")
+                 if articles != None:
+                     ret = show_results(articles, "sel articles")
+                 else:
+                     show_err("Unable to load the file....")
+
+def website():
+
+    opts =  None #load_obj("query_opts", "")
+    if opts is None:
+        opts = {"address":"", "load":"button", "popular websites":""}
+
+    shortkeys = {"l":"load", "p":"popular websites"}
+    ws_dir = user_data_dir(appname, appauthor) + "/websites"
+    saved_websites =  [Path(f).stem for f in Path(ws_dir).glob('*') if f.is_file()]
+    if saved_websites:
+        opts["sep1"] = "saved websites"
+    c = 1 
+    for ws in reversed(saved_websites):
+        opts[ws] = "button"
+        shortkeys[str(c)] = ws
+        c += 1
+    ranges = {"history":["None"], "bookmarks":["None"]}
+    ranges["popular websites"] = newspaper.popular_urls()
+    history = load_obj("history", "")
+    if history is None:
+        history = ["None"]
+    elif "None" in history:
+        history.remove("None")
+    ranges["history"] = history
+    for opt in opts:
+       if opt in ranges:
+           opts[opt] = ranges[opt][0]
+    clear_screen(std)
+    ch = 'a'
+    mi = 0
+    while ch != 'q':
+        info = "s) search l) open last results  h) other shortkeys         q) quit"
+        show_info(info)
+        ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi)
+
+        if type(ch) is int: 
+            ch = chr(ch)
+        save_obj(opts, "website_opts", "")
+        site_addr = ""
+        if ch == 'l' or ch == "load":
+            site_addr = opts["address"]
+        if ch == "popular websites":
+            site_addr = opts["popular websites"]
+        if site_addr != "":
+             show_info("Gettign articles from " + site_addr)
+             config = newspaper.Config()
+             config.memoize_articles = False
+             config.fetch_images = False
+             config.follow_meta_refresh = True
+             try:
+                 site  = newspaper.build(site_addr, memoize_articles = False) #, config)
+                 # site.download()
+                 # site.generate_articles()
+             except Exception as e:
+                 show_err("error: " + str(e))
+                 if ch == 'l' or ch == "load":
+                     mi = 0
+                 continue
+             if not site_addr in history:
+                 history.append(site_addr)
+                 save_obj(history, "history", "")
+             articles = []
+             for a in site.articles:
+                 try:
+                     a.download()
+                     a.parse()
+                 except:
+                     continue
+                 #a.nlp()
+                 art = {"id":a.title,"pdfUrl":a.url, "title":a.title, "sections":[{"title":"all", "fragments":[{"text":a.text}]},{"title":"summary", "fragments":[{"text":a.summary}]}]}
+                 articles.append(art)
+             if articles != []:
+                 uri = urlparse(site_addr)
+                 save_obj(articles, uri.netloc, "websites")
+                 ret = show_results(articles, site_addr)
+             else:
+                 show_err("No article was found...")
+             
+        elif ch.isdigit() or "." in ch:
+             selected = ch
+             if selected == "":
+                 show_err("Please select articles to load")
+             else:
+                 articles = load_obj(selected, "websites")
+                 if articles != None:
+                     ret = show_results(articles, "sel articles")
+                 else:
+                     show_err("Unable to load the file....")
 
 def search():
     filters = {}
@@ -1196,54 +1334,6 @@ def search():
                             articles = articles[0]
                         save_obj(articles, "last_results", "")
                         ret = show_results(articles, fid)
-                elif ch == 'p':
-                    text = opts["text files"]
-                    with open(text, "r") as f:
-                        data = f.read()
-                    art = [{"id":text, "title":text, "sections":[{"title":"all", "fragments":[{"text":data}]}]}]
-                    ret = show_results(art, text, mode = 'd')
-                elif ch == 'l':
-                     articles = load_obj("last_results", "")
-                     if articles != None:
-                         ret = show_results(articles, "last_results")
-                     else:
-                         show_err("Last results is missing....")
-                elif ch == 'w':
-                     site_addr = "https://" + opts["site address"] + "/"
-                     show_info("Gettign articles from " + site_addr)
-                     config = newspaper.Config()
-                     config.memoize_articles = False
-                     config.fetch_images = False
-                     config.follow_meta_refresh = True
-                     site  = newspaper.Source(site_addr, config)
-                     site.download()
-                     site.generate_articles()
-                     articles = []
-                     for a in site.articles:
-                         try:
-                             a.download()
-                             a.parse()
-                         except:
-                             continue
-                         #a.nlp()
-                         art = {"id":a.title,"pdfUrl":a.url, "title":a.title, "sections":[{"title":"all", "fragments":[{"text":a.text}]},{"title":"summary", "fragments":[{"text":a.summary}]}]}
-                         articles.append(art)
-                     if articles != []:
-                         ret = show_results(articles, site_addr)
-                     else:
-                         show_err("No articles were found...")
-                     
-                elif ch == 'o':
-                     selected = opts["saved articles"]
-                     if selected == None:
-                         show_err("Please select articles to load")
-                     else:
-                         articles = load_obj(selected, "articles")
-                         if articles != None:
-                             ret = show_results(articles, "sel articles")
-                         else:
-                             show_err("Unable to load the file....")
-
                 if ret:
                     show_err(ret[:200]+ "...", bottom = False)
 
