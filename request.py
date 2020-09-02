@@ -17,7 +17,8 @@ from curses import wrapper
 from pathlib import Path
 from urllib.parse import urlparse
 from appdirs import *
-
+import logging, sys
+logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 
 appname = "NodReader"
 appauthor = "App"
@@ -307,9 +308,8 @@ def show_results(articles, fid, mode = 'list'):
                b['frags_offset'] = ffn
                b["sents_offset"] = fsn
                frags_sents[ffn] = (fsn, b["title"])
-               if b["title"].lower() != "all":
-                   ffn += 1
-                   fsn += 1
+               ffn += 1
+               fsn += 1
                for c in b['fragments']:
                    text = c['text']
                    # if text.strip() != "":
@@ -376,9 +376,9 @@ def show_results(articles, fid, mode = 'list'):
 
                if sect_title != "all":
                    mprint(sect_title, text_win, _color, attr = cur.A_BOLD)
-                   pos[fsn],_ = text_win.getyx()
-                   ffn += 1
-                   fsn += 1
+               pos[fsn],_ = text_win.getyx()
+               ffn += 1
+               fsn += 1
                if expand == 0:
                    fsn += b["sents_num"] 
                    ffn += len(b["fragments"])
@@ -780,7 +780,7 @@ def show_results(articles, fid, mode = 'list'):
             ch = get_key(std)
     return "" 
 
-def refresh_menu(opts, menu_win, sel, ranges, shortkeys):
+def refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins):
     global clG
     clear_screen(menu_win)
     row = 3 
@@ -815,6 +815,9 @@ def refresh_menu(opts, menu_win, sel, ranges, shortkeys):
                print_there(row, col + _m + 2, "{}".format(v), menu_win, TEXT_COLOR)
 
        row += 1
+    for k, item in subwins.items():
+       sub_menu_win = menu_win.subwin(item["h"], item["w"], item["y"], item["x"])
+       sub_menu(sub_menu_win, opts, ranges, k, -1)
 
 def get_sel(opts, mi):
     mi = max(mi, 0)
@@ -862,7 +865,33 @@ def load_preset(new_preset, folder=""):
     save_obj(conf, "conf", "")
     return opts
 
-def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
+def sub_menu(sub_menu_win, opts, ranges, sel, si):
+   start = si - 5
+   start = max(start, 0)
+   if len(ranges[sel]) > 10:
+ 	  start = min(start, len(ranges[sel])-10)
+   if start > 0:
+ 	  mprint("...", sub_menu_win, cW)
+   for vi, v in enumerate(ranges[sel][start:start+10]):
+     if start + vi == si:
+        sel_v = v
+        if "color" in sel:
+            mprint("{:^8}".format(">" + str(v)), sub_menu_win, int(v), attr = cur.A_REVERSE) 
+        else:
+            mprint("{:<8}".format(str(v)),sub_menu_win, CUR_ITEM_COLOR)
+     else:
+        if "color" in sel:
+            mprint("{:^8}".format(v), sub_menu_win, int(v), attr = cur.A_REVERSE) 
+        else:
+            mprint("{:<8}".format(str(v)), sub_menu_win, ITEM_COLOR)
+   if "color" in sel:
+ 	  opts[sel] = sel_v
+ 	  reset_colors(opts)
+   if start + 10 < len(ranges[sel]):
+ 	  mprint("...", sub_menu_win, cW)
+   sub_menu_win.refresh()
+
+def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0, subwins={}):
     si = 0
     ch = 'a'
     mode = 'm'
@@ -872,10 +901,10 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
     width = cols 
 
     menu_win = cur.newwin(height, width, 0, 0)
-    sub_menu_win = menu_win.subwin(5, width//2 + 5)
+    common_subwin = menu_win.subwin(5, width//2 + 5)
 
     menu_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
-    sub_menu_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
+    common_subwin.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
 
     mprint(title.center(rows), menu_win)
     hide_cursor()
@@ -888,14 +917,21 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
     old_val = ""
     while ch != ord('q'):
         sel,mi = get_sel(opts, mi)
+        sub_menu_win = common_subwin
+        if sel in subwins:
+            sub_menu_win = menu_win.subwin(subwins[sel]["h"],
+                    subwins[sel]["w"],
+                    subwins[sel]["y"],
+                    subwins[sel]["x"])
+
         if not sel.startswith("sep"):
             clear_screen(sub_menu_win)
             if mode == 'm':
-                refresh_menu(opts, menu_win, sel, ranges, shortkeys)
-        if mode == 's' and opts[sel] != "button":
+                refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
+        if (mode == 's') and opts[sel] != "button":
            if sel not in ranges: 
               # opts[sel]=""
-              refresh_menu(opts, menu_win, sel, ranges, shortkeys)
+              refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
               _m = max([len(x) for x in opts.keys()]) + 5  
               val = minput(menu_win,row + mi, col, "{:<{}}".format(sel,_m) + ": ") 
               if val != "<ESC>":
@@ -905,36 +941,13 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
                   old_val = ""
               mi += 1
               sel,mi = get_sel(opts, mi)
-              refresh_menu(opts, menu_win, sel, ranges, shortkeys)
+              refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
               mode = 'm'
               mt = ""
            else:
               si = min(si, len(ranges[sel]) - 1)
               si = max(si, 0)
-              start = si - 5
-              start = max(start, 0)
-              if len(ranges[sel]) > 10:
-                  start = min(start, len(ranges[sel])-10)
-              if start > 0:
-                  mprint("...", sub_menu_win, cW)
-              for vi, v in enumerate(ranges[sel][start:start+10]):
-                if start + vi == si:
-                    sel_v = v
-                    if "color" in sel:
-                       mprint("{:^8}".format(">" + str(v)), sub_menu_win, int(v), attr = cur.A_REVERSE) 
-                    else:
-                        mprint("{:<8}".format(str(v)),sub_menu_win, CUR_ITEM_COLOR)
-                else:
-                    if "color" in sel:
-                        mprint("{:^8}".format(v), sub_menu_win, int(v), attr = cur.A_REVERSE) 
-                    else:
-                       mprint("{:<8}".format(str(v)), sub_menu_win, ITEM_COLOR)
-              if "color" in sel:
-                  opts[sel] = sel_v
-                  reset_colors(opts)
-              if start + 10 < len(ranges[sel]):
-                  mprint("...", sub_menu_win, cW)
-              sub_menu_win.refresh()
+              sub_menu(sub_menu_win, opts, ranges, sel, si)
 
         if not sel.startswith('sep'):
             ch = get_key(std)
@@ -982,7 +995,7 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
                     new_preset = opts[sel]
                     opts = load_preset(new_preset, title)
                     last_preset = new_preset
-                    refresh_menu(opts, menu_win, sel, ranges, shortkeys)
+                    refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
                     show_info(new_preset +  " was loaded")
                 if sel in shortkeys.values():
                     return sel, opts, mi
@@ -1000,7 +1013,7 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
         elif ch == cur.KEY_LEFT or ch == 27:
             if old_val != "":
                 opts[sel] = old_val
-                refresh_menu(opts, menu_win, sel, ranges, shortkeys)
+                refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
                 if "color" in sel:
                     reset_colors(opts)
             old_val = ""
@@ -1027,7 +1040,7 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0):
                 if sel == "preset":
                     opts = load_preset(new_item, title)
                     last_preset = new_item
-                    refresh_menu(opts, menu_win, sel, ranges, shortkeys)
+                    refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
                     show_info(new_item +  " was loaded")
                 else:
                     show_info(item +  " was deleted")
@@ -1201,20 +1214,21 @@ def website():
 
     opts =  None #load_obj("query_opts", "")
     if opts is None:
-        opts = {"address":"", "load":"button", "popular websites":""}
+        opts = {"address":"", "load":"button", "popular websites":"", "saved websites":""}
 
-    shortkeys = {"l":"load", "p":"popular websites"}
+    shortkeys = {"l":"load", "p":"popular websites", 's':"saved websites"}
     ws_dir = user_data_dir(appname, appauthor) + "/websites"
     saved_websites =  [Path(f).stem for f in Path(ws_dir).glob('*') if f.is_file()]
-    if saved_websites:
-        opts["sep1"] = "saved websites"
-    c = 1 
-    for ws in reversed(saved_websites):
-        opts[ws] = "button"
-        shortkeys[str(c)] = ws
-        c += 1
+#    if saved_websites:
+#        opts["sep1"] = "saved websites"
+#    c = 1 
+#    for ws in reversed(saved_websites):
+#        opts[ws] = "button"
+#        shortkeys[str(c)] = ws
+#        c += 1
     ranges = {"history":["None"], "bookmarks":["None"]}
     ranges["popular websites"] = newspaper.popular_urls()
+    ranges["saved websites"] = saved_websites
     history = load_obj("history", "")
     if history is None:
         history = ["None"]
@@ -1227,10 +1241,11 @@ def website():
     clear_screen(std)
     ch = 'a'
     mi = 0
+    subwins = {"saved websites":{"x":28,"y":7,"h":10,"w":38}}
     while ch != 'q':
         info = "s) search l) open last results  h) other shortkeys         q) quit"
         show_info(info)
-        ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi)
+        ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi, subwins= subwins)
 
         if type(ch) is int: 
             ch = chr(ch)
@@ -1275,8 +1290,8 @@ def website():
              else:
                  show_err("No article was found...")
              
-        elif ch.isdigit() or "." in ch:
-             selected = ch
+        elif ch == "saved websites":
+             selected = opts["saved websites"]
              if selected == "":
                  show_err("Please select articles to load")
              else:
@@ -1305,7 +1320,7 @@ def search():
            opts[opt] = ranges[opt][0]
     clear_screen(std)
     ch = 'a'
-    shortkeys = {"y":"year", "s":"search"}
+    shortkeys = {"s":"search"}
     mi = 0
     while ch != 'q':
         info = "s) search l) open last results  h) other shortkeys         q) quit"
