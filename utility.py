@@ -118,7 +118,7 @@ def minput(stdscr, r, c, prompt_string, accept_on = [], default=""):
         else:
             letter =chr(ch)
             if on_enter:
-                if letter.isalnum() or letter in [' ','-','_',':','.','?','+']:
+                if letter.isalnum() or letter in [' ','/','-','_',':','.','?','+']:
                     inp += letter 
                 else:
                     cur.beep()
@@ -156,7 +156,12 @@ acronyms = "([A-Z][.][A-Z][.](?:[A-Z][.])?)"
 websites = "[.](com|net|org|io|gov)"
 digits = "([0-9]+)"
 
+import nltk
 def rplit_into_sentences(text):
+    sents = nltk.sent_tokenize(text)
+    return sents
+
+def qplit_into_sentences(text):
     try:
         import nltk
         try:
