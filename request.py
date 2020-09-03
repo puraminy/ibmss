@@ -170,9 +170,11 @@ def add_remove_sels(d, art, ch):
     save_obj(d, "sels", "")
 
 def get_frags(text):
-    text.split("\n")
+    logging.info(text)
+    parts = text.split("\n")
+    parts = list(filter(None, parts)) 
     frags = []
-    for t in texts:
+    for t in parts:
         frag = {"text":t}
         frags.append(frag)
     return frags
@@ -218,286 +220,88 @@ def request(p = 0):
         return [], "Corrupt or no response...."
     return rsp,""
 
-
-def show_results(articles, fid, mode = 'list'):
-
-    global theme_opts, theme_ranges
-
-    if len(articles) == 0:
-        return "No article was loaded!"
-    with open("articles.txt","w") as f:
-        print(articles, file = f)
+def list_articles(articles, fid):
+    N = len(articles)
+    if N == 0:
+        return "No result fond!"
     rows, cols = std.getmaxyx()
-    ch = ''
+    main_win = cur.newwin(rows-2, cols-5, 3, 5)
+    width = cols - 10
+    main_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
     sels = load_obj("sels","")
     if sels is None:
         sels = {}
+    ch = 0
     start = 0
-    sects_num = 0
-    k,sc  = 0,0
-    N = len(articles)
-    ls = True
-    fast_read = False
-    show_prev = False
-    break_to_sent = False 
-    start_row = 0
-    text_win = cur.newpad(rows*50, cols - 10)
-    main_win = cur.newwin(rows, cols, 0, 0)
-    text_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
-    main_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
-    width = cols - 10 
-
-    # text_win = std
-    if N == 0:
-        return "No result fond!"
-    bg = ""
-    last_visited = load_obj("last_visited", "articles")
-    if last_visited is None:
-        last_visited = []
-    expand = 3
-    new_art = True
-    new_sect = True
-    old_sc = -1 
-    frags_text = ""
-    art_id = -1
-    si = 0
-    bmark = 0
-    fc = 1
-    cury = 0
-    nod = {}
-    rtime = {}
-    page_height = rows - 4
-    scroll = 1
-    show_reading_time = False
-    start_reading = True
+    k = 0
     while ch != ord('q'):
-        # clear_screen(text_win)
-        text_win.clear()
-        start_row = max(0, start_row)
-        start_row = min(cury - 1, start_row)
-        if bg != theme_opts["back-color"]:
-            clear_screen(main_win)
-            bg = theme_opts["back-color"]
-            text_win.refresh(start_row,0, 0,0, rows-1, cols)
-        k = max(k, 0)
-        k = min(k, len(articles) - 1)
-        k = min(k, N-1)
-        pos = {} 
-        art = articles[k]
-        cur_sent = "1"
-        is_section = False
-        if art["id"] != art_id:
-           if art_id != 0 and nod:
-               nods[art_id] = nod
-               save_obj(nods, "nods", "")
-           if art_id != 0 and rtime:
-               times[art_id] = rtime
-               save_obj(times, "times", "")
-           art_id = art['id']
-           # with open(art_id + ".txt", "w") as ff:
-           #    print(art, file = ff)
-           if art_id in nods:
-               nod = nods[art_id]
-           else:
-               nod = {}
-           if art_id in times:
-               rtime = times[art_id]
-           else:
-               rtime = {}
-           new_art = True
-           last_visited.insert(0, art)
-           save_obj(last_visited, "last_visited", "articles")
-           new_sect = True
-           old_sc = -1
-           sc = 0
-           fc = 1
-           si = 0
-           frags_sents = {}
-           frags_sents[0] = (0, art["title"])
-           fsn = 1
-           ffn = 1
-           for b in art["sections"]:
-               frags_text = ""
-               b['frags_offset'] = ffn
-               b["sents_offset"] = fsn
-               frags_sents[ffn] = (fsn, b["title"])
-               ffn += 1
-               fsn += 1
-               for c in b['fragments']:
-                   text = c['text']
-                   # if text.strip() != "":
-                   sents = split_into_sentences(text)
-                   frags_sents[ffn] = (fsn, sents)
-                   c['sents_offset'] = fsn 
-                   c['sents_num'] = len(sents)
-                   fsn += len(sents)
-                   ffn += 1
-               b["sents_num"] = fsn - b["sents_offset"]
-               b['frags_num'] = len(b["fragments"])
-           total_sents = fsn 
-           total_frags = ffn
-           if si >= total_sents -1:
-               si = 0
+        clear_screen(std)
+        main_win.clear()
+        print_there(2, 5, fid, std)
+        for j,a in enumerate(articles[start:start + 15]): 
+            i = start + j
+            paper_title =  a['title']
+            dots = ""
+            if len(paper_title) > width - 10:
+               dots = "..."
+            item = "{}{} {}".format(i, ":", paper_title[:width - 10] + dots)               
+            color = ITEM_COLOR
+            if a["id"] in sels:
+                color = SEL_ITEM_COLOR
+            if i == k:
+                color = CUR_ITEM_COLOR
 
+            mprint(item, main_win, color)
 
-        if sc != old_sc:
-            new_sect = True
-            old_sc = sc
-        else: 
-            new_sect = False
-        if mode == 'd':
-           a = art
-           start_time = time.time()
-           #clear_screen(text_win)
-           text_win.clear()
-           sn = 0
-           sects_num = len(a["sections"])
-           sc = max(sc, 0)
-           sc = min(sc, sects_num)
-           title = "\n".join(textwrap.wrap(a["title"], width)) # wrap at 60 characters
-           pdfurl = a["pdfUrl"]
-           top =  "["+str(k)+"] " + title 
-           if si == 0:
-               mprint(top,  text_win, HL_COLOR, attr = cur.A_BOLD) 
-               cur_sent = top
-           else:
-               mprint(top,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
-           mprint(pdfurl,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
-           pos[0],_ = text_win.getyx()
-           mprint("", text_win)
-           fsn = 1
-           ffn = 1
-           is_section = False
-           for b in a["sections"]:
-               fragments = b["fragments"]
-               fnum = len(fragments)
-               _color = ITEM_COLOR
-               if fsn == si:
-                   cur_sent = b["title"]
-                   is_section = True
-                   _color = HL_COLOR
-               if sn == sc:
-                   sect_fc = fc - b["frags_offset"] + 1
-                   sect_title = b["title"] # + f"({sect_fc+1}/{fnum})" 
-                   if fsn != si:
-                       if art_id in sels and b["title"].lower() in sels[art_id]:
-                           _color = SEL_ITEM_COLOR
-                       else:
-                           _color = CUR_ITEM_COLOR
-               else:
-                   sect_title = b["title"]
-
-               if sect_title != "all":
-                   mprint(sect_title, text_win, _color, attr = cur.A_BOLD)
-               pos[fsn],_ = text_win.getyx()
-               ffn += 1
-               fsn += 1
-               if expand == 0:
-                   fsn += b["sents_num"] 
-                   ffn += len(b["fragments"])
-               else:
-                   # mprint("", text_win)
-                   for frag in fragments:
-                       if ffn != fc and expand == 1:
-                           fsn += frag['sents_num']
-                           ffn += 1
-                       else:
-                          if not ffn in frags_sents:
-                              frag_sents = split_into_sentences(frag['text'])
-                              frags_sents[ffn] = (fsn, frag_sents)
-                          else:
-                              frag_sents = frags_sents[ffn][1]
-
-                          # if "level" in frag:
-                             # color = frag["level"] % 250
-                          hlcolor = HL_COLOR
-                          if True:
-                              for sent in frag_sents:
-                                  feedback = nod[fsn] if fsn in nod else "okay?"
-                                  reading_time = rtime[fsn][1] if fsn in rtime else 0 
-                                  f_color = SEL_ITEM_COLOR
-                                  # f_color = nod_color[feedback]
-                                  if start_reading and feedback == "yes":
-                                      color = FAINT_COLOR
-                                  else:
-                                      color = TEXT_COLOR
-                                  if feedback != 'okay' and feedback != 'okay?':
-                                      fline = "-"*20
-                                      if feedback == 'yes':
-                                          feedback = u'\u2713'
-                                      #mprint("\n" + fline, text_win, FAINT_COLOR)
-                                      mprint(feedback, text_win, f_color, end=" ")
-                                      #mprint(fline, text_win, FAINT_COLOR)
-                                  if show_reading_time:
-                                      f_color = scale_color(reading_time)
-                                      mprint(str(reading_time), text_win, f_color)
-                                  sent = "\n".join(textwrap.wrap(sent, width -5))
-                                  if fsn >= bmark and fsn <= si:
-                                      cur_sent = sent
-                                      mprint(sent, text_win, hlcolor, end= " ")
-                                  else:
-                                      mprint(sent, text_win, color, end=" ")
-                                  mprint("", text_win, f_color)
-                                  pos[fsn],_ = text_win.getyx()
-                                  fsn += 1
-                          
-                          mprint("\n", text_win, color)
-                          ffn += 1
-               sn += 1
-        else:
-            for j,a in enumerate(articles[start:start + 15]): 
-                i = start + j
-                paper_title =  a['title']
-                dots = ""
-                if len(paper_title) > width - 10:
-                   dots = "..."
-                item = "{}{} {}".format(i, ":", paper_title[:width - 10] + dots)               
-                color = ITEM_COLOR
-                if a["id"] in sels:
-                    color = SEL_ITEM_COLOR
-                if i == k:
-                    color = CUR_ITEM_COLOR
-
-                mprint(item, text_win, color)
-
-        #print(":", end="", flush=True)
-        cury, curx = text_win.getyx()
-        if mode == 'd':
-            sc = min(sc, sects_num)
-            f_offset = art['sections'][sc]['frags_offset'] 
-            offset = art["sections"][sc]["sents_offset"] 
-            show_info("frags:"+ str(total_frags) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
-        if mode == 'd' and si in pos and not ch == ord('.') and not ch == ord(','):
-            if pos[si] > 10:    
-                start_row = pos[si] - 10 
-            else:
-                start_row = 0
-        else:
-            _p = k // 15
-            all_pages = (N // 15) + (1 if N % 15 > 0 else 0) 
-            show_info("Enter) view article       PageDown) next page (load more...)     h) other shortkeys")
-            print_there(0, cols - 15, "|" + str(N) + "|" + str(_p + 1) +  " of " + str(all_pages), win_info, INFO_COLOR)
-
-        text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
-        #if is_section and cur_sent.lower() in ['abstract', 'introduction','conclusion', 'related works']:
-        #    pass
-        #else:
+        main_win.refresh()
+        _p = k // 15
+        all_pages = (N // 15) + (1 if N % 15 > 0 else 0) 
+        show_info("Enter) view article       PageDown) next page (load more...)     h) other shortkeys")
+        print_there(0, cols - 15, "|" + str(N) + "|" + str(_p + 1) +  " of " + str(all_pages), win_info, INFO_COLOR)
         ch = get_key(std)
-        # this will stop the timer
-        if ch == ord('u'):
-            with open(art["title"]  + ".txt","w") as f:
-                print(art, file = f)
-        if ch == ord('l'):
-           if nod:
-               si = 0
-               while si in nod and nod[si] != "okay?":
-                   si += 1
-               si = min(si, total_sents - 1)
+        if ch == cur.KEY_ENTER or ch == 10:
+            k = max(k, 0)
+            k = min(k, N-1)
+            show_article(articles[k])
+        if ch == cur.KEY_UP:
+            k -= 1
+        if ch == cur.KEY_DOWN:
+            k +=1
 
-        if ch == ord('r'):
-            start_reading = not start_reading
-        if ch == ord('z'):
-            show_reading_time = not show_reading_time
+        if k >= start + 15 and k < N:
+            ch = cur.KEY_NPAGE
+        if k < start:
+            ch = "prev_pg"
+
+        if ch == cur.KEY_PPAGE or ch == 'prev_pg':
+            start -= 15
+            start = max(start, 0)
+            k = start + 14 if ch == 'prev_pg' else start
+        elif ch == cur.KEY_NPAGE:
+            start += 15
+            if start > N - 15:
+                show_info("Getting articles...")
+                new_articles, ret = request(page + 1)
+                # with open("tt.txt", "w") as f:
+                #    print(str(new_articles), file =f)
+                if len(new_articles) > 0 and ret == "":
+                    if isinstance(new_articles, tuple):
+                        new_articles = new_articles[0]
+                    articles = articles + new_articles
+                    save_obj(articles, "last_results", "")
+                    N = len(articles)
+                else:
+                    #ret = textwrap.fill(ret[:200], initial_indent='', subsequent_indent='    ')
+                    show_err(ret[:200]+ "...", bottom = False)
+            start = min(start, N - 15)
+            k = start
+        elif ch == cur.KEY_HOME:
+            k = start
+        elif ch == cur.KEY_END:
+            k = N -1 #start + 14
+            mod = 15 if N % 15 == 0 else N % 15
+            start = N - mod 
+
         if ch == ord('h'):
             show_info(('\n'
                        ' s)          select an article\n'
@@ -527,224 +331,6 @@ def show_results(articles, fid, mode = 'list'):
                 if fname != "<ESC>":
                     save_obj(sel_arts, fname, "articles")
                     show_info("Selected articles were saved as " + fname)
-
-        if ch == ord('q') and mode == 'd':
-            ch = 0
-            start_row = 0
-            mode = 'list'
-            if art_id != 0 and nod:
-               nods[art_id] = nod
-               save_obj(nods, "nods", "")
-            if art_id != 0 and rtime:
-               times[art_id] = rtime
-               save_obj(times, "times", "")
-        if ch == ord('x'):
-            fast_read = not fast_read
-        if ch == ord('f') or ch == ord('s'):
-            add_remove_sels(sels, art, ch)
-        if ch == ord('e') and mode == 'd':
-            if expand < 3:
-                expand += 1
-        if ch == ord('c') and mode == 'd':
-            if expand > 0:
-                expand -= 1
-        if ch == ord('a'):
-            for ss in range(start,start+15):
-                  rr = articles[ss]
-                  add_remove_sels(sels, rr, 's')
-
-        if ch == ord('s') and mode == 'd':
-            cur_sect = art["sections"][sc]["title"].lower()
-            if art_id in sels:
-                if cur_sect in sels[art_id]:
-                    sels[art_id].remove(cur_sect)
-                else:
-                    sels[art_id].append(cur_sect)
-            else:
-                sels[art_id] = [cur_sect]
-        if ch == 127:
-            start_row = 0
-            mode = 'list'
-            if art_id != 0 and nod:
-               nods[art_id] = nod
-               save_obj(nods, "nods", "")
-            if art_id != 0 and rtime:
-               times[art_id] = rtime
-               save_obj(times, "times", "")
-
-        if mode == 'd' and (ch == cur.KEY_LEFT or ch == cur.KEY_RIGHT or ch == cur.KEY_DOWN or chr(ch).isdigit()):
-            _nod = nod[si] if si in nod else "okay?"
-            if chr(ch) == '0' or ch == cur.KEY_LEFT:
-                _nod = "so?"
-            elif chr(ch) == 'o' or chr(ch) == '1':
-                _nod = "okay"
-            elif ch == cur.KEY_RIGHT or chr(ch) == "2":
-                _nod = "yes"
-            elif chr(ch) == "3":
-                _nod = "interesting!"
-            elif chr(ch) == "4" or chr(ch) == "-":
-                _nod = "didn't get"
-            elif chr(ch) == "5" or chr(ch) == "+":
-                _nod = "got it!"
-#            
-            for ii in range(bmark, si +1):
-                nod[ii] = _nod
-
-            end_time = time.time()
-            cur_sent_length = len(cur_sent.split()) 
-            if cur_sent_length == 0:
-                cur_sent_length = 0.01
-            reading_time = (end_time - start_time)/cur_sent_length
-            reading_time = round(reading_time, 2)
-            tries = 0
-            if si in rtime:
-                avg = rtime[si][1]
-                tries = rtime[si][0] + 1
-                reading_time = avg + 1/tries*(reading_time - avg)
-
-            rtime[si] = (tries, reading_time)
-            if si  < total_sents - 1:
-                si += 1
-                if ch != cur.KEY_DOWN:
-                    bmark = si
-            else:
-                cur.beep()
-                si = total_sents - 1
-        if mode == 'd' and ch == cur.KEY_UP:
-            if si > 0: 
-                si -= 1
-            else:
-                cur.beep()
-                si = 0
-
-        update_si = False
-        if ch == ord('p'):
-            if mode == 'd':
-                k -= 1
-        if ch == ord('n'):
-            if mode == 'd':
-                k += 1
-        if ch == ord('j'):
-            if sc > 0:
-                sc -= 1
-                fc = art["sections"][sc]["frags_offset"]
-                update_si = True
-            else:
-                cur.beep()
-                sc = 0
-        if ch == ord('k'):
-            if sc < sects_num - 1:
-                sc += 1
-                fc = art["sections"][sc]["frags_offset"]
-                update_si = True
-            else:
-                cur.beep()
-                sc = sects_num -1
-        if ch == ord(';') and mode == 'd': 
-                if fc < total_frags - 1:
-                    fc += 1
-                    update_si = True
-                else:
-                    cur.beep()
-                    fc = total_frags -1
-        if ch == ord('l') and mode == 'd':
-            if mode == 'd':
-                if fc > 0 :
-                    fc -= 1
-                    update_si = True
-                else:
-                    cur.beep()
-                    fc = 0
-
-        if ch == cur.KEY_DOWN:
-            if mode == 'list':
-                k +=1
-        if ch == ord('.'):
-            if start_row < cury:
-                start_row += scroll
-            else:
-                cur.beep()
-
-        if ch == cur.KEY_UP:
-            if mode == 'list':
-                k -= 1
-        if ch == ord(','):
-            if start_row > 0:
-                start_row -= scroll
-            else:
-                cur.beep()
-
-        if k >= start + 15 and k < N:
-            ch = cur.KEY_NPAGE
-        if k < start:
-            ch = "prev_pg"
-
-        if ch == cur.KEY_PPAGE or ch == 'prev_pg':
-            if mode == 'd': 
-                si = max(si - 10, 0)
-            else:
-                start -= 15
-                start = max(start, 0)
-                k = start + 14 if ch == 'prev_pg' else start
-        elif ch == cur.KEY_NPAGE:
-            if mode == 'd':
-                si = min(si + 10, total_sents -1)
-            else:
-                start += 15
-                if start > N - 15:
-                    show_info("Getting articles...")
-                    new_articles, ret = request(page + 1)
-                    # with open("tt.txt", "w") as f:
-                    #    print(str(new_articles), file =f)
-                    if len(new_articles) > 0 and ret == "":
-                        if isinstance(new_articles, tuple):
-                            new_articles = new_articles[0]
-                        articles = articles + new_articles
-                        save_obj(articles, "last_results", "")
-                        N = len(articles)
-                    else:
-                        #ret = textwrap.fill(ret[:200], initial_indent='', subsequent_indent='    ')
-                        show_err(ret[:200]+ "...", bottom = False)
-                start = min(start, N - 15)
-                k = start
-        elif ch == cur.KEY_HOME:
-            if mode == 'd':
-                si = 0
-            else:
-                k = start
-        elif ch == cur.KEY_END:
-            if mode == 'd':
-                si = total_sents -1 
-            else:
-                k = N -1 #start + 14
-                mod = 15 if N % 15 == 0 else N % 15
-                start = N - mod 
-
-        if mode == 'd':
-            if update_si:
-                fc = max(fc, 0)
-                fc = min(fc, total_frags -1)
-                si = frags_sents[fc][0]
-            c = 0 
-            while c < sects_num  and si >= art["sections"][c]["sents_offset"]:
-                c += 1
-            sc = max(c - 1,0)
-            f = 0
-            while f < total_frags and si >= frags_sents[f][0]:
-                f += 1
-            fc = max(f - 1,0)
-
-            art['sections'][sc]['fc'] = fc 
-            if si < bmark:
-                bmark = si
-        if ch == cur.KEY_ENTER or ch == 10:
-                mode = 'd'
-                fc = 1
-                sc = 0
-        if ch == ord('t'):
-            info = "s) save as   d) delete"
-            _, theme_opts,_ = show_menu(theme_opts, theme_ranges, title="theme")
-            save_obj(theme_opts, conf["theme"], "theme")
         if ch == ord('x') or ch == ord('m'):
             merge = ch == 'm'
             if not sels:
@@ -791,6 +377,388 @@ def show_results(articles, fid, mode = 'list'):
                     f.close()
                 show_msg(str(num)+ " articles were downloaded and saved into:" + fid)
             ch = get_key(std)
+
+def show_article(art):
+
+    global theme_opts, theme_ranges
+
+    rows, cols = std.getmaxyx()
+    sects_num = 0
+    sels = load_obj("sels","")
+    if sels is None:
+        sels = {}
+    k,sc  = 0,0
+    fast_read = False
+    show_prev = False
+    break_to_sent = False 
+    start_row = 0
+    text_win = cur.newpad(rows*50, cols - 10)
+    main_win = cur.newwin(rows, cols, 0, 0)
+    text_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
+    main_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
+    width = cols - 10 
+
+    # text_win = std
+    bg = ""
+    last_visited = load_obj("last_visited", "articles")
+    if last_visited is None:
+        last_visited = []
+    last_visited.insert(0, art)
+    save_obj(last_visited, "last_visited", "articles")
+    expand = 3
+    frags_text = ""
+    art_id = -1
+    si = 0
+    bmark = 0
+    fc = 1
+    cury = 0
+    nod = {}
+    rtime = {}
+    page_height = rows - 4
+    scroll = 1
+    show_reading_time = False
+    start_reading = True
+    pos = {} 
+    cur_sent = "1"
+    is_section = False
+    art_id = art['id']
+    if art_id != 0 and nod:
+       nods[art_id] = nod
+       save_obj(nods, "nods", "")
+    if art_id != 0 and rtime:
+       times[art_id] = rtime
+       save_obj(times, "times", "")
+       # with open(art_id + ".txt", "w") as ff:
+       #    print(art, file = ff)
+    if art_id in nods:
+       nod = nods[art_id]
+    else:
+       nod = {}
+    if art_id in times:
+       rtime = times[art_id]
+    else:
+       rtime = {}
+    sc = 0
+    fc = 1
+    si = 0
+    frags_sents = {}
+    frags_sents[0] = (0, art["title"])
+    fsn = 1
+    ffn = 1
+    for b in art["sections"]:
+        frags_text = ""
+        b['frags_offset'] = ffn
+        b["sents_offset"] = fsn
+        frags_sents[ffn] = (fsn, b["title"])
+        ffn += 1
+        fsn += 1
+        for c in b['fragments']:
+            text = c['text']
+            # if text.strip() != "":
+            sents = split_into_sentences(text)
+            frags_sents[ffn] = (fsn, sents)
+            c['sents_offset'] = fsn 
+            c['sents_num'] = len(sents)
+            fsn += len(sents)
+            ffn += 1
+        b["sents_num"] = fsn - b["sents_offset"]
+        b['frags_num'] = len(b["fragments"])
+    total_sents = fsn 
+    total_frags = ffn
+    if si >= total_sents -1:
+        si = 0
+
+
+    ch = 0
+    while ch != ord('q') and ch != 127:
+        # clear_screen(text_win)
+        start_row = max(0, start_row)
+        start_row = min(cury - 1, start_row)
+        if bg != theme_opts["back-color"]:
+            clear_screen(main_win)
+            bg = theme_opts["back-color"]
+            text_win.refresh(start_row,0, 0,0, rows-1, cols)
+        start_time = time.time()
+        text_win.clear()
+        sn = 0
+        sects_num = len(art["sections"])
+        sc = max(sc, 0)
+        sc = min(sc, sects_num)
+        title = "\n".join(textwrap.wrap(art["title"], width)) # wrap at 60 characters
+        pdfurl = art["pdfUrl"]
+        top =  "["+str(k)+"] " + title 
+        if si == 0:
+            mprint(top,  text_win, HL_COLOR, attr = cur.A_BOLD) 
+            cur_sent = top
+        else:
+            mprint(top,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
+        mprint(pdfurl,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
+        pos[0],_ = text_win.getyx()
+        mprint("", text_win)
+        fsn = 1
+        ffn = 1
+        is_section = False
+        for b in art["sections"]:
+            fragments = b["fragments"]
+            fnum = len(fragments)
+            _color = ITEM_COLOR
+            if fsn == si:
+                cur_sent = b["title"]
+                is_section = True
+                _color = HL_COLOR
+            if sn == sc:
+                sect_fc = fc - b["frags_offset"] + 1
+                sect_title = b["title"] # + f"({sect_fc+1}/{fnum})" 
+                if fsn != si:
+                    if art_id in sels and b["title"].lower() in sels[art_id]:
+                        _color = SEL_ITEM_COLOR
+                    else:
+                        _color = CUR_ITEM_COLOR
+            else:
+                sect_title = b["title"]
+ 
+            if sect_title != "all":
+                mprint(sect_title, text_win, _color, attr = cur.A_BOLD)
+            pos[fsn],_ = text_win.getyx()
+            ffn += 1
+            fsn += 1
+            if expand == 0:
+                fsn += b["sents_num"] 
+                ffn += len(b["fragments"])
+            else:
+                # mprint("", text_win)
+                for frag in fragments:
+                    if ffn != fc and expand == 1:
+                        fsn += frag['sents_num']
+                        ffn += 1
+                    else:
+                       if not ffn in frags_sents:
+                           frag_sents = split_into_sentences(frag['text'])
+                           frags_sents[ffn] = (fsn, frag_sents)
+                       else:
+                           frag_sents = frags_sents[ffn][1]
+ 
+                       # if "level" in frag:
+                          # color = frag["level"] % 250
+                       hlcolor = HL_COLOR
+                       if True:
+                           for sent in frag_sents:
+                               feedback = nod[fsn] if fsn in nod else "okay?"
+                               reading_time = rtime[fsn][1] if fsn in rtime else 0 
+                               f_color = SEL_ITEM_COLOR
+                               # f_color = nod_color[feedback]
+                               if start_reading and feedback == "yes":
+                                   color = FAINT_COLOR
+                               else:
+                                   color = TEXT_COLOR
+                               if show_reading_time:
+                                   f_color = scale_color(reading_time)
+                                   mprint(str(reading_time), text_win, f_color)
+                               sent = "\n".join(textwrap.wrap(sent, width -5))
+                               if fsn >= bmark and fsn <= si:
+                                   cur_sent = sent
+                                   mprint(sent, text_win, hlcolor, end= " ")
+                               else:
+                                   mprint(sent, text_win, color, end=" ")
+                               if feedback != 'okay?':
+                                   fline = "-"*20
+                                   if feedback == 'yes':
+                                       feedback = u'\u2713'
+                                   #mprint("\n" + fline, text_win, FAINT_COLOR)
+                                   mprint(feedback, text_win, f_color, end=" ")
+                                   #mprint(fline, text_win, FAINT_COLOR)
+                               mprint("", text_win, f_color)
+                               pos[fsn],_ = text_win.getyx()
+                               fsn += 1
+                       
+                       mprint("\n", text_win, color)
+                       ffn += 1
+                     # end for fragments
+            sn += 1
+         # end for sections
+ 
+        #print(":", end="", flush=True)
+        cury, curx = text_win.getyx()
+        sc = min(sc, sects_num)
+        f_offset = art['sections'][sc]['frags_offset'] 
+        offset = art["sections"][sc]["sents_offset"] 
+        show_info("frags:"+ str(total_frags) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
+        if si in pos and not ch == ord('.') and not ch == ord(','):
+            if pos[si] > 10:    
+                start_row = pos[si] - 10 
+            else:
+                start_row = 0
+
+        text_win.refresh(start_row,0, 2,5, rows -2, cols- 5)
+        if is_section and cur_sent.lower() in ['all', 'summary', 'abstract', 'introduction','conclusion', 'related works']:
+            pass
+        else:
+            ch = get_key(std)
+        if ch == ord('u'):
+            with open(art["title"]  + ".txt","w") as f:
+                print(art, file = f)
+        if ch == ord('l'):
+           if nod:
+               si = 0
+               while si in nod and nod[si] != "okay?":
+                   si += 1
+               si = min(si, total_sents - 1)
+
+        if ch == ord('r'):
+            start_reading = not start_reading
+        if ch == ord('z'):
+            show_reading_time = not show_reading_time
+
+        if ch == ord('q') or ch == 127:
+            start_row = 0
+            if art_id != 0 and nod:
+               nods[art_id] = nod
+               save_obj(nods, "nods", "")
+            if art_id != 0 and rtime:
+               times[art_id] = rtime
+               save_obj(times, "times", "")
+        if ch == ord('x'):
+            fast_read = not fast_read
+        if ch == ord('f') or ch == ord('s'):
+            add_remove_sels(sels, art, ch)
+        if ch == ord('e'):
+            if expand < 3:
+                expand += 1
+        if ch == ord('c'):
+            if expand > 0:
+                expand -= 1
+        if ch == ord('a'):
+            for ss in range(start,start+15):
+                  rr = articles[ss]
+                  add_remove_sels(sels, rr, 's')
+
+        if ch == ord('s'):
+            cur_sect = art["sections"][sc]["title"].lower()
+            if art_id in sels:
+                if cur_sect in sels[art_id]:
+                    sels[art_id].remove(cur_sect)
+                else:
+                    sels[art_id].append(cur_sect)
+            else:
+                sels[art_id] = [cur_sect]
+
+        if (ch == cur.KEY_LEFT or ch == cur.KEY_RIGHT or ch == cur.KEY_DOWN or chr(ch).isdigit()):
+            _nod = nod[si] if si in nod else "okay?"
+            if chr(ch) == '1' or ch == cur.KEY_LEFT:
+                _nod = "so?"
+            elif chr(ch) == 'o':
+                _nod = "okay"
+            elif ch == cur.KEY_RIGHT or chr(ch) == "3":
+                _nod = "yes"
+            elif chr(ch) == "6":
+                _nod = "interesting!"
+            elif chr(ch) == "4" or chr(ch) == "-":
+                _nod = "didn't get"
+            elif chr(ch) == "+":
+                _nod = "got it!"
+#            
+            for ii in range(bmark, si +1):
+                nod[ii] = _nod
+
+            end_time = time.time()
+            cur_sent_length = len(cur_sent.split()) 
+            if cur_sent_length == 0:
+                cur_sent_length = 0.01
+            reading_time = (end_time - start_time)/cur_sent_length
+            reading_time = round(reading_time, 2)
+            tries = 0
+            if si in rtime:
+                avg = rtime[si][1]
+                tries = rtime[si][0] + 1
+                reading_time = avg + 1/tries*(reading_time - avg)
+
+            rtime[si] = (tries, reading_time)
+            if si  < total_sents - 1:
+                si += 1
+                if ch != cur.KEY_DOWN:
+                    bmark = si
+            else:
+                cur.beep()
+                si = total_sents - 1
+        if ch == cur.KEY_UP or ch == ord('5'):
+            if si > 0: 
+                si -= 1
+            else:
+                cur.beep()
+                si = 0
+
+        update_si = False
+        if ch == ord('j'):
+            if sc > 0:
+                sc -= 1
+                fc = art["sections"][sc]["frags_offset"]
+                update_si = True
+            else:
+                cur.beep()
+                sc = 0
+        if ch == ord('k'):
+            if sc < sects_num - 1:
+                sc += 1
+                fc = art["sections"][sc]["frags_offset"]
+                update_si = True
+            else:
+                cur.beep()
+                sc = sects_num -1
+        if ch == ord(';'):
+            if fc < total_frags - 1:
+                fc += 1
+                update_si = True
+            else:
+                cur.beep()
+                fc = total_frags -1
+        if ch == ord('l'):
+            if fc > 0 :
+                fc -= 1
+                update_si = True
+            else:
+                cur.beep()
+                fc = 0
+
+        if ch == ord('.'):
+            if start_row < cury:
+                start_row += scroll
+            else:
+                cur.beep()
+
+        if ch == ord(','):
+            if start_row > 0:
+                start_row -= scroll
+            else:
+                cur.beep()
+
+        if ch == cur.KEY_PPAGE:
+            si = max(si - 10, 0)
+        elif ch == cur.KEY_NPAGE:
+            si = min(si + 10, total_sents -1)
+        elif ch == cur.KEY_HOME:
+            si = 0
+        elif ch == cur.KEY_END:
+            si = total_sents -1 
+
+        if update_si:
+            fc = max(fc, 0)
+            fc = min(fc, total_frags -1)
+            si = frags_sents[fc][0]
+        c = 0 
+        while c < sects_num  and si >= art["sections"][c]["sents_offset"]:
+            c += 1
+        sc = max(c - 1,0)
+        f = 0
+        while f < total_frags and si >= frags_sents[f][0]:
+            f += 1
+        fc = max(f - 1,0)
+
+        art['sections'][sc]['fc'] = fc 
+        if si < bmark:
+            bmark = si
+        if ch == ord('t'):
+            _, theme_opts,_ = show_menu(theme_opts, theme_ranges, title="theme")
+            save_obj(theme_opts, conf["theme"], "theme")
     return "" 
 
 def refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins):
@@ -1022,7 +990,7 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0, subwins={}):
                 mode = 's'
                 st = ""
                 if sel in ranges:
-                    si = ranges[sel].index(opts[sel])
+                    si = ranges[sel].index(opts[sel]) if sel in ranges else 0
         elif ch == cur.KEY_LEFT or ch == 27:
             if old_val != "":
                 opts[sel] = old_val
@@ -1106,21 +1074,14 @@ def main(stdscr):
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
     opts =  None # load_obj("main_opts", "")
+    isFirst = False
     if opts is None:
-        opts = {"website articles":"button", "search articles":"button", "settings":"button", "help":"button", "last results":"", "saved articles":"","sep2":"", "text files":"button"}
+        isFirst = True
+        opts = {"website articles":"button", "search articles":"button", "settings":"button", "recent articles":"button", "last results":"button", "saved articles":"","sep2":"", "text files":"button","sep3":"","help":"button", "quit":"button"}
     ranges = {
-            "last results":["None"],
             "saved articles":["None"],
             }
 
-    last_results_file = user_data_dir(appname, appauthor) + "/last_results.pkl"
-    obj_file = Path(last_results_file) 
-    if not obj_file.is_file():
-        ranges["last results"] =["None"] 
-    else:
-        cr_time = time.ctime(os.path.getmtime(last_results_file))
-        cr_date = datetime.datetime.strptime(str(cr_time), "%a %b %d %H:%M:%S %Y")
-        ranges["last results"] = [cr_date]
 
 
     data_dir = user_data_dir(appname, appauthor) + "/articles"
@@ -1131,9 +1092,11 @@ def main(stdscr):
     else:
         ranges["saved articles"] = saved_articles
 
-    for opt in opts:
-       if opt in ranges:
-           opts[opt] = ranges[opt][0]
+    if isFirst:
+        for opt in opts:
+           if opt in ranges:
+               opts[opt] = ranges[opt][0] if ranges[opt] else ""
+
     conf = load_obj("conf", "")
     if conf is None:
         conf = {"theme":"default"}
@@ -1174,10 +1137,10 @@ def main(stdscr):
     #ESCDELAY = 25
     clear_screen(std)
     ch = 'a'
-    shortkeys = {"s":"search articles","l":"last results","w":"website articles", "o":"saved articles", 'p':"text files"}
+    shortkeys = {"q":"quit","r":"recent articles", "s":"search articles","l":"last results","w":"website articles", "o":"saved articles", 'p':"text files"}
     mi = 0
     while ch != 'q':
-        info = "s) search l) open last results  h) other shortkeys         q) quit"
+        info = "h) help         q) quit"
         show_info(info)
         ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi)
         if type(ch) is int:
@@ -1187,11 +1150,10 @@ def main(stdscr):
             search()
         if ch == 'h' or ch == "help":
             show_info(('\n'
-                       ' Enter)        set or change a value \n'
+                       'Press the key associated to each item, for example presss s to search articles'
                        ' Arrow keys)   next, previous item\n'
                        ' PageUp/Down)  First/Last item\n'
-                       ' o)            list saved articles \n'
-                       ' d)            delete from saved articles \n'
+                       ' d)            delete an item from list  \n'
                        '\n\n Press any key to close ...'),
                        bottom=False)
             win_info.getch()
@@ -1203,23 +1165,28 @@ def main(stdscr):
                     data = f.read()
                 art = {"id":text, "pdfUrl":text, "title":text, "sections":[{"title":"all", "fragments":[{"text":data}]}]}
                 articles.append(art)
-            ret = show_results(articles, text)
+            ret = list_articles(articles, text)
         elif ch == 'l' or ch == "last results":
+             last_results_file = user_data_dir(appname, appauthor) + "/last_results.pkl"
+             obj_file = Path(last_results_file) 
+             if  obj_file.is_file():
+                cr_time = time.ctime(os.path.getmtime(last_results_file))
+                cr_date = datetime.datetime.strptime(str(cr_time), "%a %b %d %H:%M:%S %Y")
              articles = load_obj("last_results", "")
              if articles != None:
-                 ret = show_results(articles, "last_results")
+                 ret = list_articles(articles, "results at " + str(cr_date))
              else:
                  show_err("Last results is missing....")
         elif ch == 'w' or ch == "website articles":
              website()
-        elif ch == 'o' or ch == "saved articles":
-             selected = opts["saved articles"]
+        elif ch == 'o' or ch == "saved articles" or ch=="recent articles":
+             selected = "last_visited" if ch=="recent articles" else opts["saved articles"]
              if selected == None:
                  show_err("Please select articles to load")
              else:
                  articles = load_obj(selected, "articles")
                  if articles != None:
-                     ret = show_results(articles, "sel articles")
+                     ret = list_articles(articles, "sel articles")
                  else:
                      show_err("Unable to load the file....")
 
@@ -1253,7 +1220,7 @@ def website():
     if isFirst:
         for opt in opts:
            if opt in ranges:
-               opts[opt] = ranges[opt][0]
+               opts[opt] = ranges[opt][0] if ranges[opt] else ""
     clear_screen(std)
     ch = 'a'
     mi = 0
@@ -1301,7 +1268,7 @@ def website():
              if articles != []:
                  uri = urlparse(site_addr)
                  save_obj(articles, uri.netloc, "websites")
-                 ret = show_results(articles, site_addr)
+                 ret = list_articles(articles, site_addr)
              else:
                  show_err("No article was found...")
              
@@ -1312,7 +1279,7 @@ def website():
              else:
                  articles = load_obj(selected, "websites")
                  if articles != None:
-                     ret = show_results(articles, "sel articles")
+                     ret = list_articles(articles, "sel articles")
                  else:
                      show_err("Unable to load the file....")
     save_obj(opts, "web_opts", "")
@@ -1335,7 +1302,7 @@ def search():
     if isFirst:
         for opt in opts:
            if opt in ranges:
-               opts[opt] = ranges[opt][0]
+               opts[opt] = ranges[opt][0] if ranges[opt] else ""
     clear_screen(std)
     ch = 'a'
     shortkeys = {"s":"search"}
@@ -1365,7 +1332,7 @@ def search():
                         if isinstance(articles, tuple):
                             articles = articles[0]
                         save_obj(articles, "last_results", "")
-                        ret = show_results(articles, fid)
+                        ret = list_articles(articles, fid)
                 if ret:
                     show_err(ret[:200]+ "...", bottom = False)
 
