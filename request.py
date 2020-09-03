@@ -132,7 +132,7 @@ def save_obj(obj, name, directory):
     with open(folder + '/'+ name + '.pkl', 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
-def load_obj(name, directory):
+def load_obj(name, directory, default=None):
     if directory != "":
         folder = user_data_dir(appname, appauthor) + "/" + directory
     else:
@@ -140,7 +140,7 @@ def load_obj(name, directory):
     fname = folder + '/' + name + '.pkl'
     obj_file = Path(fname) 
     if not obj_file.is_file():
-        return None 
+        return default 
     with open(fname, 'rb') as f:
         return pickle.load(f)
 
@@ -403,7 +403,12 @@ def show_article(art):
     last_visited = load_obj("last_visited", "articles")
     if last_visited is None:
         last_visited = []
-    last_visited.insert(0, art)
+    if not art in last_visited:
+        last_visited.insert(0, art)
+    else:
+        last_visited.remove(art)
+        last_visited.insert(0, art)
+
     save_obj(last_visited, "last_visited", "articles")
     expand = 3
     frags_text = ""
@@ -547,7 +552,7 @@ def show_article(art):
                                reading_time = rtime[fsn][1] if fsn in rtime else 0 
                                f_color = SEL_ITEM_COLOR
                                # f_color = nod_color[feedback]
-                               if start_reading and feedback == "yes":
+                               if start_reading and feedback != "okay?":
                                    color = FAINT_COLOR
                                else:
                                    color = TEXT_COLOR
@@ -675,8 +680,12 @@ def show_article(art):
             rtime[si] = (tries, reading_time)
             if si  < total_sents - 1:
                 si += 1
-                if ch != cur.KEY_DOWN:
+                if si in nod and nod[si] != "okay?":
+                    bmark = si 
+                elif (ch != cur.KEY_DOWN and ch != '2'):
                     bmark = si
+                elif (si -1) in nod and nod[si -1] != "okay?":
+                    bmark = si    
             else:
                 cur.beep()
                 si = total_sents - 1
@@ -789,7 +798,7 @@ def refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins):
                if v != "button":
                    print_there(row, gap, colon, menu_win, ITEM_COLOR, attr = cur.A_BOLD)
 
-       if v != "button":
+       if v != "button" and not k in subwins:
            if "color" in k:
                print_there(row, col + _m + 2, "{:^5}".format(str(v)), menu_win, color_map[k]) 
            elif not k.startswith("sep"):
@@ -909,23 +918,23 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0, subwins={}):
             clear_screen(sub_menu_win)
             if mode == 'm':
                 refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
+        if sel not in ranges and opts[sel] != "button" and not sel.startswith("sep"): 
+             # opts[sel]=""
+            cur_val = opts[sel]
+            refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
+            _m = max([len(x) for x in opts.keys()]) + 5  
+            val = minput(menu_win,row + mi, col, "{:<{}}".format(sel,_m) + ": ", default=opts[sel]) 
+            if val != "<ESC>":
+                 opts[sel] = val
+            else:
+                 opts[sel] = cur_val
+            mi += 1
+            sel,mi = get_sel(opts, mi)
+            refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
+            mode = 'm'
+            mt = ""
         if (mode == 's') and opts[sel] != "button":
-           if sel not in ranges: 
-              # opts[sel]=""
-              refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
-              _m = max([len(x) for x in opts.keys()]) + 5  
-              val = minput(menu_win,row + mi, col, "{:<{}}".format(sel,_m) + ": ") 
-              if val != "<ESC>":
-                  opts[sel] = val
-              else:
-                  opts[sel] = old_val
-                  old_val = ""
-              mi += 1
-              sel,mi = get_sel(opts, mi)
-              refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
-              mode = 'm'
-              mt = ""
-           else:
+            if sel in ranges:
               si = min(si, len(ranges[sel]) - 1)
               si = max(si, 0)
               sub_menu(sub_menu_win, opts, ranges, sel, si)
@@ -987,10 +996,10 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0, subwins={}):
         elif ch == cur.KEY_RIGHT:
             if opts[sel] != "button":
                 old_val = opts[sel]
-                mode = 's'
-                st = ""
-                if sel in ranges:
-                    si = ranges[sel].index(opts[sel]) if sel in ranges else 0
+                if sel in ranges and opts[sel] in ranges[sel]:
+                    si = ranges[sel].index(opts[sel]) 
+                    mode = 's'
+                    st = ""
         elif ch == cur.KEY_LEFT or ch == 27:
             if old_val != "":
                 opts[sel] = old_val
@@ -1000,9 +1009,6 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0, subwins={}):
             old_val = ""
             mode = 'm'
             mt = ""
-        elif ch == ord('q'):
-            # show_cursor()
-            break;
         elif ch == ord('d'):
             if mode == 'm':
                 item = opts[sel]
@@ -1040,6 +1046,7 @@ def show_menu(opts, ranges, shortkeys={}, title = "", mi = 0, subwins={}):
         elif chr(ch) in shortkeys:
             mi = list(opts.keys()).index(shortkeys[chr(ch)])
             sel,mi = get_sel(opts, mi)
+            refresh_menu(opts, menu_win, sel, ranges, shortkeys, subwins)
             if opts[sel] == "button":
                 return sel, opts, mi
             old_val = opts[sel]
@@ -1077,12 +1084,22 @@ def main(stdscr):
     isFirst = False
     if opts is None:
         isFirst = True
-        opts = {"website articles":"button", "search articles":"button", "settings":"button", "recent articles":"button", "last results":"button", "saved articles":"","sep2":"", "text files":"button","sep3":"","help":"button", "quit":"button"}
+        opts = {"website articles":"button", "webpage":"button", "search articles":"button", "settings":"button","saved articles":"", "text files":"button","sep3":"","recent articles":""}
     ranges = {
             "saved articles":["None"],
+            "recent articles":["None"],
             }
 
 
+
+    last_visited = load_obj("last_visited", "articles")
+    if last_visited is None:
+        last_visited = []
+    recent_arts = []
+    for art in last_visited[:10]:
+        recent_arts.append(art["title"][:60]+ "...")
+    subwins = {"recent articles":{"x":7,"y":12,"h":7,"w":68}}
+    ranges["recent articles"] =recent_arts 
 
     data_dir = user_data_dir(appname, appauthor) + "/articles"
 
@@ -1137,17 +1154,19 @@ def main(stdscr):
     #ESCDELAY = 25
     clear_screen(std)
     ch = 'a'
-    shortkeys = {"q":"quit","r":"recent articles", "s":"search articles","l":"last results","w":"website articles", "o":"saved articles", 'p':"text files"}
+    shortkeys = {"q":"quit","r":"recent articles", "p":"webpage", "s":"search articles","w":"website articles", "o":"saved articles", 't':"text files"}
     mi = 0
     while ch != 'q':
         info = "h) help         q) quit"
         show_info(info)
-        ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi)
+        ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi, subwins = subwins)
         if type(ch) is int:
             ch = chr(ch)
         save_obj(opts, "main_opts", "")
         if ch == "search articles":
             search()
+        elif ch == "webpage":
+            webpage()
         if ch == 'h' or ch == "help":
             show_info(('\n'
                        'Press the key associated to each item, for example presss s to search articles'
@@ -1166,17 +1185,6 @@ def main(stdscr):
                 art = {"id":text, "pdfUrl":text, "title":text, "sections":[{"title":"all", "fragments":[{"text":data}]}]}
                 articles.append(art)
             ret = list_articles(articles, text)
-        elif ch == 'l' or ch == "last results":
-             last_results_file = user_data_dir(appname, appauthor) + "/last_results.pkl"
-             obj_file = Path(last_results_file) 
-             if  obj_file.is_file():
-                cr_time = time.ctime(os.path.getmtime(last_results_file))
-                cr_date = datetime.datetime.strptime(str(cr_time), "%a %b %d %H:%M:%S %Y")
-             articles = load_obj("last_results", "")
-             if articles != None:
-                 ret = list_articles(articles, "results at " + str(cr_date))
-             else:
-                 show_err("Last results is missing....")
         elif ch == 'w' or ch == "website articles":
              website()
         elif ch == 'o' or ch == "saved articles" or ch=="recent articles":
@@ -1198,7 +1206,7 @@ def website():
         opts = {"address":"", "load":"button", "popular websites":"", "saved websites":""}
         isFirst = True
 
-    shortkeys = {"l":"load", "p":"popular websites", 's':"saved websites", 'q':"back"}
+    shortkeys = {"l":"load", "p":"popular websites", 's':"saved websites"}
     ws_dir = user_data_dir(appname, appauthor) + "/websites"
     saved_websites =  [Path(f).stem for f in Path(ws_dir).glob('*') if f.is_file()]
 #    if saved_websites:
@@ -1284,15 +1292,86 @@ def website():
                      show_err("Unable to load the file....")
     save_obj(opts, "web_opts", "")
 
+def webpage():
+
+    opts =  load_obj("webpage_opts", "")
+    isFirst = False
+    if opts is None:
+        opts = {"address":"", "load":"button", "recent pages":""}
+        isFirst = True
+
+    shortkeys = {"l":"load", "r":"recent pages"}
+    ranges = {}
+
+    recent_pages = load_obj("recent_pages", "articles")
+    if recent_pages is None:
+        recent_pages = []
+    arts = []
+    for art in recent_pages[:10]:
+        arts.append(art["title"][:60]+ "...")
+    ranges["recent pages"] = arts
+    subwins = {"recent pages":{"x":7,"y":12,"h":7,"w":68}}
+    if isFirst:
+        for opt in opts:
+           if opt in ranges:
+               opts[opt] = ranges[opt][0] if ranges[opt] else ""
+    clear_screen(std)
+    ch = 'a'
+    mi = 0
+    history = load_obj("history", "", [])
+    while ch != 'q':
+        ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi, subwins= subwins)
+
+        if type(ch) is int: 
+            ch = chr(ch)
+        url = ""
+        if ch == 'l' or ch == "load":
+            url = opts["address"]
+        if url != "":
+             show_info("Gettign article from " + url)
+             config = newspaper.Config()
+             config.memoize_articles = False
+             config.fetch_images = False
+             config.follow_meta_refresh = True
+             try:
+                 a  = newspaper.Article(url)
+                 a.download()
+                 a.parse()
+                 # site.generate_articles()
+             except Exception as e:
+                 show_err("error: " + str(e))
+                 if ch == 'l' or ch == "load":
+                     mi = 0
+                 continue
+             if not url in history:
+                 history.append(url)
+                 save_obj(history, "history", "")
+             art = {"id":a.title,"pdfUrl":a.url, "title":a.title, "sections":[{"title":"all", "fragments":get_frags(a.text)},{"title":"summary", "fragments":[{"text":a.summary}]}]}
+             if not art in recent_pages:
+                 recent_pages.append(art)
+                 save_obj(recent_pages, "recent_pages","")
+             show_article(art)
+        elif ch == "recent pages":
+             selected = opts["recent pages"]
+             if selected == "":
+                 show_err("Please select articles to load")
+             else:
+                 articles = load_obj(selected, "websites")
+                 if articles != None:
+                     ret = list_articles(articles, "sel articles")
+                 else:
+                     show_err("Unable to load the file....")
+    save_obj(opts, "web_opts", "")
+
 def search():
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts = load_obj("query_opts", "")
+    opts = None # load_obj("query_opts", "")
     isFirst = False
     if opts is None:
         isFirst = True 
-        opts = {"keywords":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"","sep1":"", "search":"button"}
+        opts = {"keywords":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"","sep1":"", "search":"button", "last results":"button"}
     ranges = {
             "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
             "task": ["All", "Reading Comprehension", "Machine Reading Comprehension","Sentiment Analysis", "Question Answering", "Transfer Learning","Natural Language Inference", "Computer Vision", "Machine Translation", "Text Classification", "Decision Making"],
@@ -1305,13 +1384,10 @@ def search():
                opts[opt] = ranges[opt][0] if ranges[opt] else ""
     clear_screen(std)
     ch = 'a'
-    shortkeys = {"s":"search"}
+    shortkeys = {"s":"search", "l":"last results"}
     mi = 0
     while ch != 'q':
-        info = "s) search l) open last results  h) other shortkeys         q) quit"
-        show_info(info)
         ch, opts, mi = show_menu(opts, ranges, shortkeys = shortkeys, mi = mi)
-
         if type(ch) is int: 
             ch = chr(ch)
         if ch != 'q':
@@ -1320,7 +1396,7 @@ def search():
                     filters[k] = str(v)
             try:
                 ret = ""
-                if ch == 's' or 'search':
+                if ch == 's' or  ch == 'search':
                     show_info("Getting articles...")
                     query = opts["keywords"]
                     articles,ret = request(0)
@@ -1333,8 +1409,19 @@ def search():
                             articles = articles[0]
                         save_obj(articles, "last_results", "")
                         ret = list_articles(articles, fid)
-                if ret:
-                    show_err(ret[:200]+ "...", bottom = False)
+                    if ret:
+                        show_err(ret[:200]+ "...", bottom = False)
+                elif ch == 'l' or ch == "last results":
+                     last_results_file = user_data_dir(appname, appauthor) + "/last_results.pkl"
+                     obj_file = Path(last_results_file) 
+                     if  obj_file.is_file():
+                        cr_time = time.ctime(os.path.getmtime(last_results_file))
+                        cr_date = datetime.datetime.strptime(str(cr_time), "%a %b %d %H:%M:%S %Y")
+                     articles = load_obj("last_results", "")
+                     if articles != None:
+                         ret = list_articles(articles, "results at " + str(cr_date))
+                     else:
+                         show_err("Last results is missing....")
 
             except KeyboardInterrupt:
                 choice = ord('q')
