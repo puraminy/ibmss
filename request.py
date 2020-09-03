@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from appdirs import *
 import logging, sys
-logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+logging.basicConfig(filename='nodreader.log', level=logging.DEBUG)
 
 appname = "NodReader"
 appauthor = "App"
@@ -169,6 +169,14 @@ def add_remove_sels(d, art, ch):
         del d[key]
     save_obj(d, "sels", "")
 
+def get_frags(text):
+    text.split("\n")
+    frags = []
+    for t in texts:
+        frag = {"text":t}
+        frags.append(frag)
+    return frags
+
 def request(p = 0):
      
     global page
@@ -243,6 +251,9 @@ def show_results(articles, fid, mode = 'list'):
     if N == 0:
         return "No result fond!"
     bg = ""
+    last_visited = load_obj("last_visited", "articles")
+    if last_visited is None:
+        last_visited = []
     expand = 3
     new_art = True
     new_sect = True
@@ -294,6 +305,8 @@ def show_results(articles, fid, mode = 'list'):
            else:
                rtime = {}
            new_art = True
+           last_visited.insert(0, art)
+           save_obj(last_visited, "last_visited", "articles")
            new_sect = True
            old_sc = -1
            sc = 0
@@ -453,7 +466,7 @@ def show_results(articles, fid, mode = 'list'):
             sc = min(sc, sects_num)
             f_offset = art['sections'][sc]['frags_offset'] 
             offset = art["sections"][sc]["sents_offset"] 
-            show_info("sc:"+ str(sc) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
+            show_info("frags:"+ str(total_frags) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
         if mode == 'd' and si in pos and not ch == ord('.') and not ch == ord(','):
             if pos[si] > 10:    
                 start_row = pos[si] - 10 
@@ -1094,7 +1107,7 @@ def main(stdscr):
     filter_items = ["year", "conference", "dataset", "task"]
     opts =  None # load_obj("main_opts", "")
     if opts is None:
-        opts = {"search articles":"button", "website articles":"button", "settings":"button", "help":"button", "last results":"", "saved articles":"","sep2":"", "text files":"button"}
+        opts = {"website articles":"button", "search articles":"button", "settings":"button", "help":"button", "last results":"", "saved articles":"","sep2":"", "text files":"button"}
     ranges = {
             "last results":["None"],
             "saved articles":["None"],
@@ -1161,7 +1174,7 @@ def main(stdscr):
     #ESCDELAY = 25
     clear_screen(std)
     ch = 'a'
-    shortkeys = {"l":"last results","w":"website articles", "o":"saved articles", 'p':"text files"}
+    shortkeys = {"s":"search articles","l":"last results","w":"website articles", "o":"saved articles", 'p':"text files"}
     mi = 0
     while ch != 'q':
         info = "s) search l) open last results  h) other shortkeys         q) quit"
@@ -1212,11 +1225,13 @@ def main(stdscr):
 
 def website():
 
-    opts =  None #load_obj("query_opts", "")
+    opts =  load_obj("web_opts", "")
+    isFirst = False
     if opts is None:
         opts = {"address":"", "load":"button", "popular websites":"", "saved websites":""}
+        isFirst = True
 
-    shortkeys = {"l":"load", "p":"popular websites", 's':"saved websites"}
+    shortkeys = {"l":"load", "p":"popular websites", 's':"saved websites", 'q':"back"}
     ws_dir = user_data_dir(appname, appauthor) + "/websites"
     saved_websites =  [Path(f).stem for f in Path(ws_dir).glob('*') if f.is_file()]
 #    if saved_websites:
@@ -1235,9 +1250,10 @@ def website():
     elif "None" in history:
         history.remove("None")
     ranges["history"] = history
-    for opt in opts:
-       if opt in ranges:
-           opts[opt] = ranges[opt][0]
+    if isFirst:
+        for opt in opts:
+           if opt in ranges:
+               opts[opt] = ranges[opt][0]
     clear_screen(std)
     ch = 'a'
     mi = 0
@@ -1249,7 +1265,6 @@ def website():
 
         if type(ch) is int: 
             ch = chr(ch)
-        save_obj(opts, "website_opts", "")
         site_addr = ""
         if ch == 'l' or ch == "load":
             site_addr = opts["address"]
@@ -1281,7 +1296,7 @@ def website():
                  except:
                      continue
                  #a.nlp()
-                 art = {"id":a.title,"pdfUrl":a.url, "title":a.title, "sections":[{"title":"all", "fragments":[{"text":a.text}]},{"title":"summary", "fragments":[{"text":a.summary}]}]}
+                 art = {"id":a.title,"pdfUrl":a.url, "title":a.title, "sections":[{"title":"all", "fragments":get_frags(a.text)},{"title":"summary", "fragments":[{"text":a.summary}]}]}
                  articles.append(art)
              if articles != []:
                  uri = urlparse(site_addr)
@@ -1300,13 +1315,16 @@ def website():
                      ret = show_results(articles, "sel articles")
                  else:
                      show_err("Unable to load the file....")
+    save_obj(opts, "web_opts", "")
 
 def search():
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
-    opts =  None #load_obj("query_opts", "")
+    opts = load_obj("query_opts", "")
+    isFirst = False
     if opts is None:
+        isFirst = True 
         opts = {"keywords":"reading comprehension", "year":"","task":"", "conference":"", "dataset":"","sep1":"", "search":"button"}
     ranges = {
             "year":["All"] + [str(y) for y in range(now.year,2010,-1)], 
@@ -1314,10 +1332,10 @@ def search():
             "conference": ["All", "Arxiv", "ACL", "Workshops", "EMNLP", "IJCNLP", "NAACL", "LERC", "CL", "COLING", "BEA"],
             "dataset": ["All","SQuAD", "RACE", "Social Media", "TriviaQA", "SNLI", "GLUE", "Image Net", "MS Marco", "TREC", "News QA" ],
             }
-
-    for opt in opts:
-       if opt in ranges:
-           opts[opt] = ranges[opt][0]
+    if isFirst:
+        for opt in opts:
+           if opt in ranges:
+               opts[opt] = ranges[opt][0]
     clear_screen(std)
     ch = 'a'
     shortkeys = {"s":"search"}
@@ -1329,7 +1347,6 @@ def search():
 
         if type(ch) is int: 
             ch = chr(ch)
-        save_obj(opts, "query_opts", "")
         if ch != 'q':
             for k,v in opts.items():
                 if k in filter_items and v and v != "All":
@@ -1355,6 +1372,7 @@ def search():
             except KeyboardInterrupt:
                 choice = ord('q')
                 show_cursor()
+    save_obj(opts, "query_opts", "")
 
 if __name__ == "__main__":
     wrapper(main)
