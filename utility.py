@@ -90,8 +90,9 @@ def rinput(stdscr, r, c, prompt_string, default=""):
         cur.noecho()
         return default
 
-def minput(stdscr, r, c, prompt_string, accept_on = [], default=""):
+def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
     on_enter = False
+    rows, cols = stdscr.getmaxyx()
     if not accept_on:
         on_enter = True
         accept_on = [10, cur.KEY_ENTER]
@@ -99,37 +100,72 @@ def minput(stdscr, r, c, prompt_string, accept_on = [], default=""):
         accept_on = [ord(ch) for ch in accept_on]
     show_cursor()
     cur.echo() 
-    stdscr.keypad(False)
-    stdscr.addstr(r, c, prompt_string)
+    stdscr.keypad(True)
+    stdscr.addstr(row, col, prompt_string)
     stdscr.refresh()
     stdscr.clrtoeol()
-    inp = default
-    ch = 'b'
+    inp = str(default)
+    pos = len(inp)
+    ch = 0
+    start = col + len(prompt_string)
     while ch not in accept_on:
-        stdscr.addstr(r, c+ len(prompt_string), inp)
+        stdscr.addstr(row, start, inp)
         stdscr.clrtoeol()
+        pos = max(pos, 0)
+        pos = min(pos, len(inp))
+        xloc = start + pos
+        yloc = row + (xloc // cols)
+        xloc = xloc % cols
+        stdscr.move(yloc, xloc)
         ch = stdscr.getch()
         if ch == 127 or ch == cur.KEY_BACKSPACE:
-            inp=inp[:-1]
-        if ch == 27:
+            if pos > 0:
+                inp = inp[:pos-1] + inp[pos:]
+                pos -= 1
+            else:
+                cur.beep()
+        elif ch == cur.KEY_DC:
+            if pos < len(inp):
+                inp = inp[:pos] + inp[pos+1:]
+            else:
+                cur.beep()
+        elif chr(ch)=='\\':
+            inp = ""
+        elif ch == cur.KEY_HOME:
+            pos = 0
+        elif ch == cur.KEY_END:
+            pos = len(inp)
+        elif ch == cur.KEY_LEFT:
+            if pos > 0:
+                pos -= 1 
+            else:
+                cur.beep()
+        elif ch == cur.KEY_RIGHT:
+            pos += 1
+        elif ch == cur.KEY_UP or ch == cur.KEY_DOWN:
             hide_cursor()
             cur.noecho()
-            return "<ESC>"
+            return inp,ch
+        elif ch == 27:
+            hide_cursor()
+            cur.noecho()
+            return "<ESC>",ch
         else:
             letter =chr(ch)
             if on_enter:
-                if letter.isalnum() or letter in [' ','/','-','_',':','.','?','+']:
-                    inp += letter 
+                if letter.isalnum() or letter in [' ',',','/','-','_',':','.','?','+']:
+                    inp = inp[:pos] + letter + inp[pos:]
+                    pos += 1
                 else:
                     cur.beep()
             else:
                 if ch in accept_on:
-                    inp += letter
+                    inp = inp[:pos] + letter + inp[pos:]
                 else:
                     cur.beep()
     cur.noecho()
     hide_cursor()
-    return inp  
+    return inp,ch  
 
 def get_key(stdscr = None):
     if stdscr is not None:
@@ -176,13 +212,15 @@ def qplit_into_sentences(text):
 
 def split_into_sentences(text, debug = False, limit = 2):
     text = " " + text + "  "
-    text = text.replace("\n"," ")
+    text = text.replace("\n","<stop>")
     text = re.sub(prefixes,"\\1<prd>",text)
     text = re.sub(websites,"<prd>\\1",text)
     text = text.replace("[FRAG]","<stop>")
     text = text.replace("Ph.D.","Ph<prd>D<prd>")
     text = text.replace("et al.","et al<prd>")
     text = text.replace("e.g.","e<prd>g<prd>")
+    text = text.replace("vs.","vs<prd>")
+    text = text.replace("etc.","etc<prd>")
     text = text.replace("i.e.","i<prd>e<prd>")
     text = re.sub("\s" + alphabets + "[.] "," \\1<prd> ",text)
     text = re.sub(acronyms+" "+starters,"\\1<stop> \\2",text)
