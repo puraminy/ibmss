@@ -34,8 +34,6 @@ template_menu = {}
 template_options = {}
 
 conf = {}
-nods = {}
-times = {}
 page = 0
 query = ""
 filters = {}
@@ -77,7 +75,9 @@ nod_color = {
         "interesting!":(114,bcolors.OKGREEN),
         "didn't get":(218,bcolors.FAIL),
         "so?":(248,bcolors.WARNING),
-        "how?":(242,bcolors.WARNING),
+        "how?":(179,bcolors.WARNING),
+        "needs review":(179,bcolors.WARNING),
+        "needs research":(179,bcolors.WARNING),
         "got it!":(98,bcolors.OKGREEN),
         }
 
@@ -360,7 +360,7 @@ def request(p = 0):
         return [], "Corrupt or no response...."
     return rsp,""
 
-def list_articles(articles, fid, show_nod = False):
+def list_articles(articles, fid, show_nod = False, group=""):
     global template_menu
 
     N = len(articles)
@@ -384,9 +384,13 @@ def list_articles(articles, fid, show_nod = False):
             i = start + j
             paper_title =  a['title']
             dots = ""
+            if "year" in a:
+                h = a['year']
+            else:
+                h = i
             if len(paper_title) > width - 10:
                dots = "..."
-            item = "{}{} {}".format(i, ":", paper_title[:width - 10] + dots)               
+            item = "[{}] {}".format(h, paper_title[:width - 10] + dots)               
             color = ITEM_COLOR
             if a in sel_arts:
                 color = SEL_ITEM_COLOR
@@ -434,8 +438,6 @@ def list_articles(articles, fid, show_nod = False):
             if start > N - 15:
                 show_info("Getting articles for "+ query)
                 new_articles, ret = request(page + 1)
-                # with open("tt.txt", "w") as f:
-                #    print(str(new_articles), file =f)
                 if len(new_articles) > 0 and ret == "":
                     if isinstance(new_articles, tuple):
                         new_articles = new_articles[0]
@@ -484,7 +486,7 @@ def list_articles(articles, fid, show_nod = False):
                       sel_arts.append(art)
                   else:
                       sel_arts.remove(art)
-        if ch == ord('d'):
+        if ch == ord('d') and group =="tags":
             if not sel_arts:
                 art = articles[k]
                 if len(art["tags"]) == 1:
@@ -596,11 +598,8 @@ def show_article(art, show_nod=""):
 
     # text_win = std
     bg = ""
-    last_visited = load_obj("last_visited", "articles", [])
     tagged_articles = load_obj("tagged_articles", "articles", [])
     nod_articles = load_obj("nod_articles", "articles", [])
-    insert_article(last_visited, art)
-    save_obj(last_visited, "last_visited", "articles")
     expand = 3
     frags_text = ""
     art_id = -1
@@ -608,32 +607,14 @@ def show_article(art, show_nod=""):
     bmark = 0
     fc = 1
     cury = 0
-    nod = {}
-    rtime = {}
     page_height = rows - 4
     scroll = 1
     show_reading_time = False
     start_reading = True
-    pos = {} 
     cur_sent = "1"
     is_section = False
     art_id = art['id']
-    if art_id != 0 and nod:
-       nods[art_id] = nod
-       save_obj(nods, "nods", "")
-    if art_id != 0 and rtime:
-       times[art_id] = rtime
-       save_obj(times, "times", "")
-       # with open(art_id + ".txt", "w") as ff:
-       #    print(art, file = ff)
-    if art_id in nods:
-       nod = nods[art_id]
-    else:
-       nod = {}
-    if art_id in times:
-       rtime = times[art_id]
-    else:
-       rtime = {}
+    
     sc = 0
     fc = 1
     si = 0
@@ -669,7 +650,28 @@ def show_article(art, show_nod=""):
     HL_COLOR = SEL_ITEM_COLOR
     ni = 0
     show_all = False
-    visible = {}
+    if "visible" in art:
+        visible = art["visible"]
+    else:
+        visible = [True]*total_sents
+    if "passable" in art:
+        passable = art["passable"]
+    else:
+        passable = [False]*total_sents
+    if "nods" in art:
+       nod = art["nods"]
+    else:
+       nod = [""]*total_sents
+    if "times" in art:
+       rtime = art["times"]
+    else:
+       rtime = {} 
+    pos = [0]*total_sents
+    nods_changed = False
+    show_info("r) resume from last position")
+    figures = []
+    if "figures" in art:
+        figures = art["figures"]
     while ch != ord('q') and ch != 127:
         # clear_screen(text_win)
         start_row = max(0, start_row)
@@ -694,7 +696,7 @@ def show_article(art, show_nod=""):
             mprint(top,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
         mprint(pdfurl,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
         pos[0],_ = text_win.getyx()
-        visible[0] = True
+        passable[0] = False
         mprint("", text_win)
         fsn = 1
         ffn = 1
@@ -712,16 +714,21 @@ def show_article(art, show_nod=""):
                 sect_title = b["title"] # + f"({sect_fc+1}/{fnum})" 
                 if fsn != si:
                     if art_id in sel_sects and b["title"].lower() in sel_sects[art_id]:
-                        _color = SEL_ITEM_COLOR
+                        _color = HL_COLOR
                     else:
-                        _color = CUR_ITEM_COLOR
+                        _color = SEL_ITEM_COLOR
             else:
                 sect_title = b["title"]
  
             if sect_title != "all":
                 mprint(sect_title, text_win, _color, attr = cur.A_BOLD)
+#            if "figure" in b and b["figure"] is not None:
+#                fig_num = int(b["figure"])
+#                fig = figures[fig_num]
+#                mprint("Figure " + str(fig_num), text_win, _color, attr = cur.A_BOLD)
+
             pos[fsn],_ = text_win.getyx()
-            visible[fsn] = True
+            passable[fsn] = True
             ffn += 1
             fsn += 1
             if expand == 0:
@@ -746,13 +753,14 @@ def show_article(art, show_nod=""):
                        color = FAINT_COLOR
                        if True:
                            for sent in frag_sents:
-                               if fsn in nod:
-                                   nod[fsn] = "" if nod[fsn] == "okay?" else nod[fsn]
+                               nod[fsn] = "" if nod[fsn] == "okay?" else nod[fsn]
                                    # sent += f_color + " [" + feedback + "]" + f_color
                                
-                               feedback = nod[fsn] if fsn in nod else ""
+                               feedback = nod[fsn] 
                                if show_nod != "" and show_nod != feedback and not show_all:
                                    visible[fsn] = False
+
+                               if not visible[fsn]: 
                                    pos[fsn],_ = text_win.getyx()
                                    fsn +=1 
                                    continue
@@ -789,7 +797,7 @@ def show_article(art, show_nod=""):
                                    # mprint(hline, text_win, hlcolor, end="")
                                else:
                                    mprint(sent, text_win, color, end=end)
-                               if feedback != '':
+                               if feedback != '' and feedback != 'OK' and passable[fsn] == False:
                                    if feedback == 'yes':
                                        feedback = u'\u2713'
                                    f_color,_ = nod_color[feedback]
@@ -800,7 +808,6 @@ def show_article(art, show_nod=""):
                                    # start_row += 1
                                else:
                                    pass # mprint("", text_win, f_color)
-                               visible[fsn] = True
                                pos[fsn],_ = text_win.getyx()
                                fsn += 1
                        
@@ -816,8 +823,7 @@ def show_article(art, show_nod=""):
         f_offset = art['sections'][sc]['frags_offset'] 
         offset = art["sections"][sc]["sents_offset"] 
         # show_info("frags:"+ str(total_frags) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
-        show_info("r) resume from last position")
-        if bmark in pos and not (ch == ord('.') or ch == ord(',')): # or ch == ord('2') or ch == cur.KEY_DOWN):
+        if not (ch == ord('.') or ch == ord(',')): 
             if pos[bmark] > 7:    
                 start_row = pos[bmark] - 7 
             else:
@@ -827,6 +833,7 @@ def show_article(art, show_nod=""):
         #if ch != cur.KEY_LEFT:
         text_win.refresh(start_row,0, 2,left, rows -2, cols)
         ch = get_key(std)
+        show_info("r) resume from last position")
         if ch == ord('+'):
             if width < 2*cols // 3: 
                 text_win.clear()
@@ -850,7 +857,7 @@ def show_article(art, show_nod=""):
            cur.beep()
            if nod:
                si = 0
-               while si in nod and nod[si] != "":
+               while nod[si] != "" or visible[si] == False:
                    si += 1
                si = min(si, total_sents - 1)
                bmark = si
@@ -860,14 +867,6 @@ def show_article(art, show_nod=""):
         if ch == ord('z'):
             show_reading_time = not show_reading_time
 
-        if ch == ord('q') or ch == 127:
-            start_row = 0
-            if art_id != 0 and nod:
-               nods[art_id] = nod
-               save_obj(nods, "nods", "")
-            if art_id != 0 and rtime:
-               times[art_id] = rtime
-               save_obj(times, "times", "")
         if ch == ord('x'):
             fast_read = not fast_read
         if ch == ord('a'):
@@ -879,10 +878,12 @@ def show_article(art, show_nod=""):
             write_article(art, folder)
             show_msg("The article was written in " + folder)
         if ch == ord('y'):
-            nod = {}
-            if art_id != 0 and nod:
-               nods[art_id] = nod
-               save_obj(nods, "nods", "")
+            _confirm = confirm(win_info, "reset the article")
+            if _confirm == "y" or _confirm == "a":
+                nod = [""]*total_sents
+                rtime = {} 
+                visible = [True]*total_sents
+                passable = [False]*total_sents
         if ch == ord('e'):
             if expand < 3:
                 expand += 1
@@ -901,24 +902,28 @@ def show_article(art, show_nod=""):
 
         if ch == cur.KEY_LEFT or ch == cur.KEY_RIGHT or ch == cur.KEY_DOWN:
             nod_set = False
-            _nod = nod[si] if si in nod else ""
-            if chr(ch) == '1' or ch == cur.KEY_RIGHT:
+            _nod = nod[si] 
+            if ch == cur.KEY_RIGHT:
                 if _nod == "":
                     _nod = "OK"
-            elif ch == cur.KEY_LEFT or chr(ch) == "3":
-                ypos = pos[si]-start_row
-                nod_win = cur.newwin(8, 15, ypos + 1, left - 2)
+            elif ch == cur.KEY_LEFT:
+                ypos = pos[bmark]-start_row
+                nod_win = cur.newwin(8, 15, ypos + 2, left - 2)
                 nod_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
-                opts = ["interesting!", "so?", "how?", "didn't get", "got it!", "needs research"]
+                opts = ["interesting!", "so?", "how?","needs review", "needs research", "didn't get", "got it!", "remove"]
                 ni = select_box(nod_win, opts, ni)
                 if ni >= 0:
                     _nod = opts[ni]
-                    insert_article(nod_articles, art)
-                    save_obj(nod_articles, "nod_articles", "articles")
                     nod_set = True
+                    nods_changed = True
 #            
-            for ii in range(bmark, si +1):
-                nod[ii] = _nod
+            for ii in range(bmark, si + 1):
+                #if ii < si:
+                #    passable[ii] = True
+                if _nod == "remove":
+                    visible[ii] = False
+                if visible[si] and (nod[ii] == "" or nod[ii] == "OK"):
+                    nod[ii] = _nod
 
             end_time = time.time()
             cur_sent_length = len(cur_sent.split()) 
@@ -933,17 +938,25 @@ def show_article(art, show_nod=""):
                 reading_time = avg + 1/tries*(reading_time - avg)
 
             rtime[si] = (tries, reading_time)
-            if si  < total_sents - 1:
+            can_inc = True
+            next_sect_start = total_sents
+            if sc + 1 < sects_num:
+                next_sect_start = art["sections"][sc +1]["sents_offset"]
+            if ch == cur.KEY_DOWN and (si + 1 >= next_sect_start or si - bmark >= 4):
+                can_inc = False
+            if si  < total_sents - 1 and can_inc:
                 if ch == cur.KEY_DOWN or ch == cur.KEY_RIGHT or nod_set:
                     si += 1
-                    while visible[si] == False and si < total_sents -1:
+                    while (visible[si] == False or passable[si] == True) and si < total_sents -1:
                         si += 1
                     
                 if ch != cur.KEY_DOWN: 
                     bmark = si
             else:
                 cur.beep()
-                si = total_sents - 1
+                show_info("Please use left or right arrow keys to go to the next sentnce.")
+                if si > total_sents - 1:
+                    si = total_sents - 1
         if ch == cur.KEY_UP or chr(ch) == '5':
             if si > 0: 
                 si -= 1
@@ -997,10 +1010,13 @@ def show_article(art, show_nod=""):
             else:
                 cur.beep()
 
+
         if ch == cur.KEY_PPAGE:
             si = max(si - 10, 0)
+            bmark = si
         elif ch == cur.KEY_NPAGE:
             si = min(si + 10, total_sents -1)
+            bmark = si
         elif ch == cur.KEY_HOME:
             si = 0
         elif ch == cur.KEY_END:
@@ -1010,6 +1026,7 @@ def show_article(art, show_nod=""):
             fc = max(fc, 0)
             fc = min(fc, total_frags -1)
             si = frags_sents[fc][0]
+            bmark = si
         c = 0 
         while c < sects_num  and si >= art["sections"][c]["sents_offset"]:
             c += 1
@@ -1059,9 +1076,7 @@ def show_article(art, show_nod=""):
                     else:
                         remove_article(tagged_articles, art)
 
-                    insert_article(last_visited, art)
                     save_obj(tagged_articles, "tagged_articles", "articles")
-                    save_obj(last_visited, "last_visited", "articles")
             text_win.clear()
             text_win.refresh(0,0, 2,0, rows -2, cols)
         if ch == ord('t'):
@@ -1071,6 +1086,17 @@ def show_article(art, show_nod=""):
             save_obj(theme_menu, conf["theme"], "theme")
             text_win.clear()
             text_win.refresh(0,0, 2,0, rows -2, cols)
+        if ch == ord('q') or ch == 127: # before exiting artilce
+            art["nods"] = nod
+            art["times"] = rtime
+            art["passable"] = passable
+            art["visible"] = visible
+            if nods_changed:
+                insert_article(nod_articles, art)
+                save_obj(nod_articles, "nod_articles", "articles")
+            last_visited = load_obj("last_visited", "articles")
+            insert_article(last_visited, art)
+            save_obj(last_visited, "last_visited", "articles")
     return "" 
 
 def refresh_menu(menu, menu_win, sel, options, shortkeys, subwins):
@@ -1145,7 +1171,7 @@ def load_preset(new_preset, options, folder=""):
     menu = load_obj(new_preset, folder)
     if menu == None and folder == "theme":
         dark ={'preset': 'dark',"sep1":"colors", 'text-color': '247', 'back-color': '234', 'item-color': '71', 'cur-item-color': '101', 'sel-item-color': '33', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'153', "inverse-highlight":"True", "bold-highlight":"True"}
-        light = {'preset': 'light',"sep1":"colors", 'text-color': '142', 'back-color': '253', 'item-color': '12', 'cur-item-color': '35', 'sel-item-color': '39', 'title-color': '28', "sep2":"reading mode","faint-color":'251' ,"highlight-color":'119', "inverse-highlight":"True","bold-highlight":"True"}
+        light = {'preset': 'light',"sep1":"colors", 'text-color': '233', 'back-color': '243', 'item-color': '18', 'cur-item-color': '235', 'sel-item-color': '111', 'title-color': '17', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'119', "inverse-highlight":"True","bold-highlight":"True"}
         for mm in [dark, light]:
            mm["save as"] = "button"
            mm["reset"] = "button"
@@ -1188,7 +1214,7 @@ def select_box(win, opts, ni):
         clear_screen(win)
         show_submenu(win, opts, ni)
         ch = get_key(std)
-        if ch == cur.KEY_RIGHT:
+        if ch == cur.KEY_RIGHT or ch == cur.KEY_LEFT:
            clear_screen(win)
            return ni
         if ch == cur.KEY_UP:
@@ -1197,7 +1223,8 @@ def select_box(win, opts, ni):
             ni += 1
         else:
             cur.beep()
-            show_info("Use right arrow to select the item!")
+            show_info("Use right or left arrow keys to select the item!")
+
     clear_screen(win)
     return -1
     
@@ -1470,7 +1497,7 @@ def find(list, st, ch, default):
     return default,""
 
 def main(stdscr):
-    global template_menu, template_options, theme_options, theme_menu, std, conf, times, nods, query, filters
+    global template_menu, template_options, theme_options, theme_menu, std, conf, query, filters
 
     std = stdscr
     # mouse = cur.mousemask(cur.ALL_MOUSE_EVENTS)
@@ -1516,15 +1543,9 @@ def main(stdscr):
            if opt in options:
                menu[opt] = options[opt][0] if options[opt] else ""
 
-    conf = None #load_obj("conf", "")
+    conf = load_obj("conf", "")
     if conf is None:
         conf = {"theme":"default", "template":"txt"}
-    nods = load_obj("nods", "")
-    times = None # load_obj("times", "")
-    if nods is None:
-        nods = {}
-    if times is None:
-        times = {}
 
     colors = [str(y) for y in range(-1, cur.COLORS)]
     theme_options = {
@@ -1627,22 +1648,20 @@ def list_nods():
             if len(articles) > 0:
                 ret = list_articles(articles, sel_nod, True)
             opts, art_list = refresh_nods()
-        elif choice.startswith("del@nods"):
-            save_obj(menu["nods"], "nods", "")
 
 def refresh_nods():
     nod_articles = load_obj("nod_articles","articles", [])
-    nods = load_obj("nods","")
     N = len(nod_articles)
     art_num = {}
     art_list = {}
     nod_list = []
     for art in nod_articles:
-        _id = art["id"]
-        art_nods = nods[_id]
-        for _, nod in art_nods.items():
+        if not "nods" in art:
+            continue
+        art_nods = art["nods"]
+        for nod in art_nods:
             nod = nod.strip()
-            if nod == "OK":
+            if nod == "OK" or nod == "":
                 continue
             if not nod in nod_list:
                 nod_list.append(nod)
@@ -1701,7 +1720,7 @@ def list_tags():
             sel_tag = sel_tag.strip()
             articles = art_list[sel_tag]
             if len(articles) > 0:
-                ret = list_articles(articles, sel_tag)
+                ret = list_articles(articles, sel_tag, group = "tags")
             opts, art_list = refresh_tags()
         elif choice.startswith("del@tags"):
             save_obj(menu["tags"], "tags", "")
