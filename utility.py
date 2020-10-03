@@ -90,10 +90,15 @@ def rinput(stdscr, r, c, prompt_string, default=""):
         cur.noecho()
         return default
 
-def confirm(win, msg):
+def confirm_all(win, msg):
+    return confirm(win, msg, acc = ['y','Y','n','N','a']) 
+
+def confirm(win, msg, acc = ['y','Y','n','N']):
     c,_ = minput(win, 0, 1, 
             "Are you sure you want to " + msg + "? (y/n/a)",
-            accept_on = ['y','Y','n','N','a'])
+            accept_on = acc)
+    win.clear()
+    win.refresh()
     return c.lower()
 
 def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
@@ -158,8 +163,10 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
             return "<ESC>",ch
         else:
             letter =chr(ch)
-            if on_enter:
-                if letter.isalnum() or letter in ['#','%','$','@','!','^','&','(',')', '*',' ',',','/','-','_',':','.','?','+']:
+            if len(inp) >= cols - len(prompt_string):
+                cur.beep()
+            elif on_enter:
+                if letter.isalnum() or letter in ["'",'#','%','$','@','!','^','&','(',')', '*',' ',',','/','-','_',':','.','?','+']:
                     inp = inp[:pos] + letter + inp[pos:]
                     pos += 1
                 else:
