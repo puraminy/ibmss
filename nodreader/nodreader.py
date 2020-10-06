@@ -13,7 +13,7 @@ import shlex
 import re
 import textwrap
 import json
-from nodreader.utility import *
+from utility import *
 #from utility import *
 import curses as cur
 from curses import wrapper
@@ -426,8 +426,7 @@ def list_articles(articles, fid, show_nod = False, group=""):
     start = 0
     k = 0
     while ch != ord('q'):
-        clear_screen(std)
-        main_win.clear()
+        main_win.erase()
         print_there(2, 5, fid + " " + query, std)
         for j,a in enumerate(articles[start:start + 15]): 
             i = start + j
@@ -457,6 +456,7 @@ def list_articles(articles, fid, show_nod = False, group=""):
         if ch == cur.KEY_ENTER or ch == 10:
             k = max(k, 0)
             k = min(k, N-1)
+            clear_screen(main_win)
             if show_nod:
                 show_article(articles[k], fid)
             else:
@@ -640,10 +640,8 @@ def show_article(art, show_nod=""):
     break_to_sent = False 
     start_row = 0
     width = 2*cols // 3 
-    text_win = cur.newpad(rows*50, width)
-    main_win = cur.newwin(rows, cols, 0, 0)
+    text_win = cur.newpad(rows*20, width)
     text_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
-    main_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
 
     # text_win = std
     bg = ""
@@ -732,12 +730,11 @@ def show_article(art, show_nod=""):
         start_row = max(0, start_row)
         start_row = min(cury - 1, start_row)
         if bg != theme_menu["back-color"]:
-            clear_screen(main_win)
             bg = theme_menu["back-color"]
-            text_win.refresh(start_row,0, 0,0, rows-1, cols-1)
+            #text_win.refresh(start_row,0, 0,0, rows-1, cols-1)
             show_info(main_info)
         start_time = time.time()
-        text_win.clear()
+        text_win.erase()
         sn = 0
         sects_num = len(art["sections"])
         sc = max(sc, 0)
@@ -879,14 +876,14 @@ def show_article(art, show_nod=""):
         show_info(main_info)
         if ch == ord('+'):
             if width < 2*cols // 3: 
-                text_win.clear()
+                text_win.erase()
                 text_win.refresh(0,0, 2,0, rows -2, cols-1)
                 width +=2
             else:
                 cur.beep()
         if ch == ord('-'):
             if width > cols // 3:
-                text_win.clear()
+                text_win.erase()
                 text_win.refresh(0,0, 2,0, rows -2, cols-1)
                 width -= 2
             else:
@@ -934,7 +931,7 @@ def show_article(art, show_nod=""):
                        '\n\n Press any  key to close ...'),
                        bottom=False)
             win_info.getch()
-            text_win.clear()
+            text_win.erase()
             text_win.refresh(start_row,0, 0,0, rows-1, cols-1)
         if ch == ord('x'):
             fast_read = not fast_read
@@ -1172,7 +1169,7 @@ def show_article(art, show_nod=""):
                         remove_article(saved_articles, art)
 
                     save_obj(saved_articles, "saved_articles", "articles")
-            text_win.clear()
+            text_win.erase()
             text_win.refresh(0,0, 2,0, rows -2, cols)
         if ch == ord('f'):
             ypos = 5
@@ -1203,7 +1200,7 @@ def show_article(art, show_nod=""):
             while choice != 'q':
                 choice, theme_menu,_ = show_menu(theme_menu, theme_options, title="theme")
             save_obj(theme_menu, conf["theme"], "theme")
-            text_win.clear()
+            text_win.erase()
             text_win.refresh(0,0, 2,0, rows -2, cols-1)
         if ch == ord('q') or ch == 127: # before exiting artilce
             art["nods"] = nods

@@ -49,7 +49,8 @@ def mprint(text, stdscr =None, color=0, attr = None, end="\n", refresh = False):
         if not refresh:
             pass #stdscr.refresh(0,0, 0,0, height -5, width)
         else:
-            stdscr.refresh()
+            #stdscr.refresh()
+            pass
 
 def print_there(x, y, text, stdscr = None, color=0, attr = None, pad = False):
     if stdscr is not None:
