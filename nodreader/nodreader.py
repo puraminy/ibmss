@@ -13,10 +13,8 @@ import shlex
 import re
 import textwrap
 import json
-import newspaper
-import getch as gh
-from utility import *
-import _curses # _curses.pyd supplied locally for python27 win32
+from nodreader.utility import *
+#from utility import *
 import curses as cur
 from curses import wrapper
 from curses.textpad import rectangle
@@ -25,6 +23,11 @@ from urllib.parse import urlparse
 from appdirs import *
 import logging, sys
 logging.basicConfig(filename='nodreader.log', level=logging.DEBUG)
+npaper = True
+try:
+    import newspaper
+except ImportError as e:
+    npaper = False
 
 appname = "NodReader"
 appauthor = "App"
@@ -110,7 +113,7 @@ def reset_colors(theme, bg = None):
     if bg is None:
         bg = int(theme["back-color"])
     back_color = bg
-    for each in range(cur.COLORS):
+    for each in range(1, 255):
         cur.init_pair(each, each, bg)
     cur.init_pair(TEXT_COLOR, int(theme["text-color"]), bg)
     cur.init_pair(ITEM_COLOR, int(theme["item-color"]), bg)
@@ -413,7 +416,7 @@ def list_articles(articles, fid, show_nod = False, group=""):
     if N <= 0:
         return "No result found!"
     rows, cols = std.getmaxyx()
-    main_win = cur.newwin(rows-2, cols-5, 3, 5)
+    main_win = cur.newwin(rows-4, cols-6, 3, 5)
     width = cols - 10
     main_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
     sel_arts = []
@@ -731,7 +734,7 @@ def show_article(art, show_nod=""):
         if bg != theme_menu["back-color"]:
             clear_screen(main_win)
             bg = theme_menu["back-color"]
-            text_win.refresh(start_row,0, 0,0, rows-1, cols)
+            text_win.refresh(start_row,0, 0,0, rows-1, cols-1)
             show_info(main_info)
         start_time = time.time()
         text_win.clear()
@@ -871,20 +874,20 @@ def show_article(art, show_nod=""):
 
         left = (cols - width)//2
         #if ch != cur.KEY_LEFT:
-        text_win.refresh(start_row,0, 2,left, rows -2, cols)
+        text_win.refresh(start_row,0, 2,left, rows -2, cols-1)
         ch = get_key(std)
         show_info(main_info)
         if ch == ord('+'):
             if width < 2*cols // 3: 
                 text_win.clear()
-                text_win.refresh(0,0, 2,0, rows -2, cols)
+                text_win.refresh(0,0, 2,0, rows -2, cols-1)
                 width +=2
             else:
                 cur.beep()
         if ch == ord('-'):
             if width > cols // 3:
                 text_win.clear()
-                text_win.refresh(0,0, 2,0, rows -2, cols)
+                text_win.refresh(0,0, 2,0, rows -2, cols-1)
                 width -= 2
             else:
                cur.beep()
@@ -932,7 +935,7 @@ def show_article(art, show_nod=""):
                        bottom=False)
             win_info.getch()
             text_win.clear()
-            text_win.refresh(start_row,0, 0,0, rows-1, cols)
+            text_win.refresh(start_row,0, 0,0, rows-1, cols-1)
         if ch == ord('x'):
             fast_read = not fast_read
         if ch == ord('a'):
@@ -1201,7 +1204,7 @@ def show_article(art, show_nod=""):
                 choice, theme_menu,_ = show_menu(theme_menu, theme_options, title="theme")
             save_obj(theme_menu, conf["theme"], "theme")
             text_win.clear()
-            text_win.refresh(0,0, 2,0, rows -2, cols)
+            text_win.refresh(0,0, 2,0, rows -2, cols-1)
         if ch == ord('q') or ch == 127: # before exiting artilce
             art["nods"] = nods
             art["times"] = rtime
@@ -1629,7 +1632,7 @@ def find(list, st, ch, default):
             return i,ch
     return default,""
 
-def main(stdscr):
+def start(stdscr):
     global template_menu, template_options, theme_options, theme_menu, std, conf, query, filters
 
     std = stdscr
@@ -1646,9 +1649,15 @@ def main(stdscr):
     isFirst = False
     if menu is None:
         isFirst = True
-        menu = {"search articles":"button", "website articles":"button", "webpage":"button",
-                "tagged articles":"button", "nods":"button", "comments":"button",
-                "text files":"button","options":"button","sep3":"","recent articles":""}
+        if npaper:
+            menu = {"search articles":"button", "website articles":"button", "webpage":"button",
+                    "tagged articles":"button", "nods":"button", "comments":"button",
+                    "text files":"button","options":"button","sep3":"","recent articles":""}
+        else:
+            menu = {"search articles":"button", 
+                    "tagged articles":"button", "nods":"button", "comments":"button",
+                    "text files":"button","options":"button","sep3":"","recent articles":""}
+
     options = {
             "saved articles":["None"],
             "recent articles":["None"],
@@ -2118,5 +2127,8 @@ def search():
                 show_cursor()
     save_obj(menu, "query_menu", "")
 
+def main():
+    wrapper(start)
+
 if __name__ == "__main__":
-    wrapper(main)
+    main()

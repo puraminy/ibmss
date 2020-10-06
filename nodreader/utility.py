@@ -1,6 +1,5 @@
 import sys
 import os
-import getch as gh
 import curses as cur
 
 if os.name == 'nt':
@@ -181,19 +180,7 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
     return inp,ch  
 
 def get_key(stdscr = None):
-    if stdscr is not None:
-        return stdscr.getch()
-    else:
-        first_char = gh.getch()
-        if first_char == '\x1b':
-            try:
-                ret = {'[2':'insert','[3':'delete', '[H':'home','[F':'end', '[5':'pgup','[6':'pgdown','[A': 'up', '[B': 'down', '[C': 'right', '[D': 'left'}[gh.getch() + gh.getch()]
-            except:
-                ret = 'NA'
-            return ret
-        else:
-            return first_char
-
+    return stdscr.getch()
 
 # -*- coding: utf-8 -*-
 import re
@@ -205,7 +192,6 @@ acronyms = "([A-Z][.][A-Z][.](?:[A-Z][.])?)"
 websites = "[.](com|net|org|io|gov)"
 digits = "([0-9]+)"
 
-import nltk
 def rplit_into_sentences(text):
     sents = nltk.sent_tokenize(text)
     return sents
