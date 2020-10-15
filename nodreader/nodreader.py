@@ -13,8 +13,10 @@ import shlex
 import re
 import textwrap
 import json
-from utility import *
-#from utility import *
+try:
+    from nodreader.util import *
+except:
+    from util import *
 import curses as cur
 from curses import wrapper
 from curses.textpad import rectangle
@@ -22,15 +24,32 @@ from pathlib import Path
 from urllib.parse import urlparse
 from appdirs import *
 import logging, sys
-logging.basicConfig(filename='nodreader.log', level=logging.DEBUG)
-npaper = True
-try:
-    import newspaper
-except ImportError as e:
-    npaper = False
+import traceback
 
 appname = "NodReader"
 appauthor = "App"
+
+app_path = user_data_dir(appname, appauthor)
+logging.basicConfig(filename=app_path + '/log_file.log', level=logging.DEBUG)
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    import sys
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    exc_info=(exc_type, exc_value, exc_traceback)
+    logging.critical("\nDate:" + str(datetime.datetime.now()), exc_info=(exc_type, exc_value, exc_traceback))
+    print("An error occured, check log file at ",app_path," to see the error details.")
+    traceback.print_exception(*exc_info)
+
+sys.excepthook = handle_exception
+
+newspaper_imported = True
+try:
+    import newspaper
+except ImportError as e:
+    newspaper_imported = False
+
 
 std = None
 theme_menu = {}
@@ -53,7 +72,9 @@ ERR_COLOR = 106
 HL_COLOR = 107
 FAINT_COLOR = 108
 MSG_COLOR = 109
-COMMENT_COLOR = 146
+TEMP_COLOR = 110
+TEMP_COLOR2 = 111
+COMMENT_COLOR = 25
 
 class bcolors:
     HEADER = '\033[95m'
@@ -76,28 +97,29 @@ color_map = {
         "faint-color":FAINT_COLOR,
         }
 nod_color = {
-        "arose":(147,bcolors.HEADER),
+        "yes":(147,bcolors.HEADER),
         "OK":(36,bcolors.OKBLUE),
-        "okay":(36,bcolors.OKBLUE),
-        "interesting!":(114,bcolors.OKGREEN),
+        "agree":(22,bcolors.OKBLUE),
+        "okay":(27,bcolors.OKBLUE),
+        "interesting!":(22,bcolors.OKGREEN),
         "important!":(114,bcolors.OKGREEN),
         "idea!":(114,bcolors.OKGREEN),
-        "didn't get":(218,bcolors.FAIL),
+        "what?":(89,bcolors.FAIL),
         "so?":(248,bcolors.WARNING),
-        "how?":(179,bcolors.WARNING),
-        "why?":(179,bcolors.WARNING),
-        "needs review":(179,bcolors.WARNING),
-        "needs research":(179,bcolors.WARNING),
+        "how?":(93,bcolors.WARNING),
+        "why?":(95,bcolors.WARNING),
+        "review":(179,bcolors.WARNING),
+        "research":(179,bcolors.WARNING),
         "got it!":(98,bcolors.OKGREEN),
         }
 
 cW = 7
 cR = 1
-cG = 4
+cG = 29
 cY = 5
-cB = 6 
+cB = 27  
 cPink = 15
-cC = 8
+cC = 9 
 clC = 16
 clY = 13
 cGray = 10
@@ -113,21 +135,21 @@ def reset_colors(theme, bg = None):
     if bg is None:
         bg = int(theme["back-color"])
     back_color = bg
-    for each in range(1, 255):
+    for each in range(1,min(256, cur.COLORS)):
         cur.init_pair(each, each, bg)
-    cur.init_pair(TEXT_COLOR, int(theme["text-color"]), bg)
-    cur.init_pair(ITEM_COLOR, int(theme["item-color"]), bg)
-    cur.init_pair(CUR_ITEM_COLOR, bg, int(theme["cur-item-color"]))
-    cur.init_pair(SEL_ITEM_COLOR, int(theme["sel-item-color"]), bg)
-    cur.init_pair(TITLE_COLOR, int(theme["title-color"]), bg)
-    cur.init_pair(INFO_COLOR, bg, int(theme["text-color"]))
+    cur.init_pair(TEXT_COLOR, int(theme["text-color"]) % cur.COLORS, bg)
+    cur.init_pair(ITEM_COLOR, int(theme["item-color"]) % cur.COLORS, bg)
+    cur.init_pair(CUR_ITEM_COLOR, bg, int(theme["cur-item-color"]) % cur.COLORS)
+    cur.init_pair(SEL_ITEM_COLOR, int(theme["sel-item-color"]) % cur.COLORS, bg)
+    cur.init_pair(TITLE_COLOR, int(theme["title-color"]) % cur.COLORS, bg)
     if theme["inverse-highlight"] == "True":
-        cur.init_pair(HL_COLOR, bg, int(theme["highlight-color"]))
+        cur.init_pair(HL_COLOR, bg, int(theme["highlight-color"]) % cur.COLORS)
     else:
-        cur.init_pair(HL_COLOR, int(theme["highlight-color"]), bg)
-    cur.init_pair(FAINT_COLOR, int(theme["faint-color"]), bg)
-    cur.init_pair(ERR_COLOR, cW, cR)
-    cur.init_pair(MSG_COLOR, cW, cC)
+        cur.init_pair(HL_COLOR, int(theme["highlight-color"]) % cur.COLORS, bg)
+    cur.init_pair(FAINT_COLOR, int(theme["faint-color"]) % cur.COLORS, bg)
+    cur.init_pair(ERR_COLOR, cW, cR % cur.COLORS)
+    cur.init_pair(MSG_COLOR, cW, cB % cur.COLORS)
+    cur.init_pair(INFO_COLOR, cW, cG % cur.COLORS)
     # for key,val in nod_color.items():
        # cur.init_pair(val[0], bg, val[0])
 
@@ -243,7 +265,7 @@ def download(url, title):
 
 def save_obj(obj, name, directory):
     if name.strip() == "":
-        logging.info("Empty object to save")
+        logger.info("Empty object to save")
         return
     if directory != "":
         folder = user_data_dir(appname, appauthor) + "/" + directory
@@ -416,7 +438,7 @@ def list_articles(articles, fid, show_nod = False, group=""):
     if N <= 0:
         return "No result found!"
     rows, cols = std.getmaxyx()
-    main_win = cur.newwin(rows-4, cols-6, 3, 5)
+    main_win = cur.newwin(rows-3, cols-6, 2, 5)
     width = cols - 10
     main_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
     sel_arts = []
@@ -427,7 +449,7 @@ def list_articles(articles, fid, show_nod = False, group=""):
     k = 0
     while ch != ord('q'):
         main_win.erase()
-        print_there(2, 5, fid + " " + query, std)
+        mprint(fid + " " + query, main_win, cW)
         for j,a in enumerate(articles[start:start + 15]): 
             i = start + j
             paper_title =  a['title']
@@ -456,7 +478,7 @@ def list_articles(articles, fid, show_nod = False, group=""):
         if ch == cur.KEY_ENTER or ch == 10:
             k = max(k, 0)
             k = min(k, N-1)
-            clear_screen(main_win)
+            main_win.erase()
             if show_nod:
                 show_article(articles[k], fid)
             else:
@@ -628,10 +650,34 @@ def write_article(article, folder):
     f.close()
     show_info("Artice was writen to " + fpath + '...')
 
+def sel_nod(ypos, left, ni):
+    nod_win = cur.newwin(8, 60, ypos + 2, left)
+    nod_win.bkgd(' ', cur.color_pair(INFO_COLOR)) # | cur.A_REVERSE)
+    opts = None #load_obj("nod_opts","")
+    if opts is None:
+        opts = ["interesting!", "important!", "agree", "what?", "how?", "why?", "review", "research","idea!", "custom", "remove"]
+        save_obj(opts, "nod_opts", "")
+
+    ni = select_box(nod_win, opts, ni, in_row = True)
+    if ni >= 0:
+        _nod = opts[ni]
+        if _nod == "custom":
+            custom_nod,_ = minput(win_info, 0, 1, "Enter a note or a nod (<Esc> to cancel):") 
+            _nod = custom_nod if custom_nod != "<ESC>" else ""
+            if _nod != "":
+                opts.append(_nod)
+                save_obj(opts, "nod_opts", "")
+        nod_win.erase()
+        return _nod
+    else:
+        nod_win.erase()
+        return 'NULL'
+
+
 def show_article(art, show_nod=""):
     global theme_menu, theme_options, query, filters
     rows, cols = std.getmaxyx()
-    sects_num = 0
+    total_sects = 0
     sel_sects = {}
     sel_arts = []
     k,sc  = 0,0
@@ -640,7 +686,7 @@ def show_article(art, show_nod=""):
     break_to_sent = False 
     start_row = 0
     width = 2*cols // 3 
-    text_win = cur.newpad(rows*20, width)
+    text_win = cur.newpad(rows*20, cols -1)
     text_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
 
     # text_win = std
@@ -649,14 +695,13 @@ def show_article(art, show_nod=""):
     expand = 3
     frags_text = ""
     art_id = -1
-    si = 0
-    bmark = 0
     fc = 1
     cury = 0
     page_height = rows - 4
     scroll = 1
     show_reading_time = False
     start_reading = True
+    figures_created = False
     cur_sent = "1"
     is_section = False
     art_id = art['id']
@@ -664,6 +709,7 @@ def show_article(art, show_nod=""):
     sc = 0
     fc = 1
     si = 0
+    bmark = 0
     frags_sents = {}
     frags_sents[0] = (0, art["title"])
     fsn = 1
@@ -688,16 +734,19 @@ def show_article(art, show_nod=""):
         b['frags_num'] = len(b["fragments"])
     total_sents = fsn 
     total_frags = ffn
+    si = 2
+    fc = 2
     if si >= total_sents -1:
         si = 0
+
+    if bmark < si:
+        bmark = si
 
 
     ch = 0
     main_info = "o) download/open externally f) list figures h) more commands "
     show_info(main_info)
-    HL_COLOR = SEL_ITEM_COLOR
     ni,fi = 0,0
-    show_all = False
     if "visible" in art:
         visible = art["visible"]
     else:
@@ -719,26 +768,27 @@ def show_article(art, show_nod=""):
     else:
        rtime = {} 
     pos = [0]*total_sents
-    nods_changed = False
-    comments_changed = False
+    art_changed = False
+    art_changed = False
     show_info("r) resume from last position")
     figures = []
     if "figures" in art:
         figures = art["figures"]
     while ch != ord('q') and ch != 127:
         # clear_screen(text_win)
+        text_win.erase()
         start_row = max(0, start_row)
         start_row = min(cury - 1, start_row)
         if bg != theme_menu["back-color"]:
             bg = theme_menu["back-color"]
             #text_win.refresh(start_row,0, 0,0, rows-1, cols-1)
             show_info(main_info)
+            text_win.erase()
         start_time = time.time()
-        text_win.erase()
         sn = 0
-        sects_num = len(art["sections"])
+        total_sects = len(art["sections"])
         sc = max(sc, 0)
-        sc = min(sc, sects_num)
+        sc = min(sc, total_sects)
         title = "\n".join(textwrap.wrap(art["title"], width)) # wrap at 60 characters
         pdfurl = art["pdfUrl"]
         top =  "["+str(k)+"] " + title 
@@ -804,8 +854,10 @@ def show_article(art, show_nod=""):
                            for sent in frag_sents:
                                nods[fsn] = "okay" if nods[fsn] == "OK" else nods[fsn]
                                feedback = nods[fsn] + " " + comments[fsn]
-                               if show_nod != "" and not show_nod in feedback and not show_all:
+                               if show_nod != "" and not show_nod in feedback:
                                    visible[fsn] = False
+                               elif nods[fsn] != "remove":
+                                   visible[fsn] = True
 
                                if not visible[fsn]: 
                                    pos[fsn],_ = text_win.getyx()
@@ -814,7 +866,7 @@ def show_article(art, show_nod=""):
 
                                #cur.init_pair(NOD_COLOR,back_color,cG)
                                reading_time = rtime[fsn][1] if fsn in rtime else 0 
-                               f_color = SEL_ITEM_COLOR
+                               f_color = HL_COLOR
                                hline = "-"*(width)
                                if show_reading_time:
                                    f_color = scale_color(reading_time)
@@ -823,12 +875,17 @@ def show_article(art, show_nod=""):
                                lines = filter(None, lines)
                                end = ""
                                sent = ""
+                               # sent += " "*(width -2) + "\n"
                                for line in lines:
                                    sent += "  " + line.ljust(width-4)+"\n" 
-                               if fsn >= bmark and fsn <= si:
+                               #sent += " "*(width - 2) + "\n"
+                               if nods[fsn] == "" or nods[fsn] == "next":
+                                   pass
+                                   #sent += " "*(width -2) + "\n"
+                               if fsn >= bmark and fsn <= si and not passable[fsn]:
                                    hl_pos = text_win.getyx() 
                                    cur_sent = sent
-                                   hlcolor = CUR_ITEM_COLOR
+                                   hlcolor = HL_COLOR
                                    if theme_menu["bold-highlight"]== "True":
                                        mprint(sent, text_win, hlcolor, attr=cur.A_BOLD, end=end)
                                    else:
@@ -839,19 +896,32 @@ def show_article(art, show_nod=""):
                                    if nods[fsn] in nod_color:
                                        f_color,_ = nod_color[nods[fsn]]
                                    else:
-                                       f_color = HL_COLOR
-                                   if nods[fsn] != "":
-                                       mprint(nods[fsn], text_win, f_color, end = " ")
+                                       f_color = TEXT_COLOR
+                                   if nods[fsn] != "" and nods[fsn] != "next":
+                                       if fsn >= bmark and fsn <= si:
+                                           tmp = nods[fsn].ljust(width-2) 
+                                           cur.init_pair(TEMP_COLOR, back_color, f_color % cur.COLORS)
+                                           mprint(tmp, text_win,TEMP_COLOR)
+                                       else:
+                                           mprint(nods[fsn], text_win, f_color)
+
                                    if comments[fsn] != "":
-                                       mprint(comments[fsn], text_win, COMMENT_COLOR, end = "\n")
-                                   else:
-                                       mprint("", text_win, f_color)
+                                       if fsn >= bmark and fsn <= si:
+                                           tmp = comments[fsn].ljust(width-2) 
+                                           cur.init_pair(TEMP_COLOR2, back_color, COMMENT_COLOR % cur.COLORS)
+                                           mprint(tmp, text_win, TEMP_COLOR2, end = "\n")
+                                       else:
+                                           mprint(comments[fsn], text_win, COMMENT_COLOR, end = "\n")
+                                       #mprint(" "*(width-3), text_win, HL_COLOR)
                                else:
                                    pass # mprint("", text_win, f_color)
                                pos[fsn],_ = text_win.getyx()
                                fsn += 1
                        
-                       mprint("", text_win, color)
+                       if fsn >= bmark and fsn <= si:
+                           mprint(" "*(width-2), text_win, HL_COLOR)
+                       else:
+                           mprint(" ", text_win, color)
                        ffn += 1
                      # end for fragments
             sn += 1
@@ -859,13 +929,13 @@ def show_article(art, show_nod=""):
  
         #print(":", end="", flush=True)
         cury, curx = text_win.getyx()
-        sc = min(sc, sects_num)
+        sc = min(sc, total_sects)
         f_offset = art['sections'][sc]['frags_offset'] 
         offset = art["sections"][sc]["sents_offset"] 
         # show_info("frags:"+ str(total_frags) + " start row:" + str(start_row) + " frag offset:"+ str(f_offset)  + " fc:" + str(fc) + " si:" + str(si) + " sent offset:" + str(offset))
         if not (ch == ord('.') or ch == ord(',')): 
-            if pos[bmark] > 7:    
-                start_row = pos[bmark] - 7 
+            if pos[bmark] > rows // 3:    
+                start_row = pos[bmark] - rows //3 
             else:
                 start_row = 0
 
@@ -888,6 +958,13 @@ def show_article(art, show_nod=""):
                 width -= 2
             else:
                cur.beep()
+        if ch == ord('a'):
+            if show_nod != '':
+                show_nod = ''
+            else:
+                ypos = pos[bmark]-start_row
+                tmp = sel_nod(ypos, left, ni)
+                show_nod = tmp if tmp != "NULL" else ""
         if ch == ord('o'):
             download(art["pdfUrl"], art["title"])
         if ch == ord('d'):
@@ -901,6 +978,7 @@ def show_article(art, show_nod=""):
                si -= 1
            si = max(si, 1)
            bmark = si 
+           update_si = True
 
         if ch == ord('v'):
             _confirm = confirm(win_info, "restore the removed parts?")
@@ -911,28 +989,29 @@ def show_article(art, show_nod=""):
 
         if ch == ord('h'):
             show_info(('\n'
-                       ' o)             download/open file externally\n'
+                       ' o)             download/open pdf file externally\n'
                        ' f)             list figures\n'
                        ' t)             tag the article\n'
-                       ' d)             delete the external file \n'
+                       ' d)             delete the external pdf file \n'
                        ' w)             write the article into file\n'
-                       ' f)             select output file format\n'
+                       ' p)             select output file format\n'
                        ' m)             change color theme\n'
                        ' u)             reset comments and nods\n'
                        ' v)             restore removed sentences\n'
+                       ' a)             show/hide filtered text\n'
                        ' +/-)           increase/decrease the width of text\n'
                        ' Right)         next sentence\n'
                        ' Down)          expand the selection\n'
                        ' Left)          nod the selection\n'
                        ' :)             add a comment to the selection\n'
                        ' k/j)           previous/next section\n'
+                       ' l/;)           previous/next fragment\n'
                        ' PgUp/PgDown)   previous/next page\n'
                        ' q)             return \n'
-                       '\n\n Press any  key to close ...'),
+                       ''),
                        bottom=False)
-            win_info.getch()
             text_win.erase()
-            text_win.refresh(start_row,0, 0,0, rows-1, cols-1)
+            text_win.refresh(0,0, 0,0, rows-1, cols-1)
         if ch == ord('x'):
             fast_read = not fast_read
         if ch == ord('a'):
@@ -971,37 +1050,21 @@ def show_article(art, show_nod=""):
             nod_set = False
             _nod = nods[si] 
             if ch == cur.KEY_RIGHT:
-                if _nod == "":
-                    _nod = "okay"
+                #if _nod == "" or _nod == "next":
+                _nod = "okay"
+                nod_set = True
             elif ch == cur.KEY_LEFT:
                 ypos = pos[bmark]-start_row
-                nod_win = cur.newwin(8, 15, ypos + 2, left - 2)
-                nod_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
-                opts = None #load_obj("nod_opts","")
-                if opts is None:
-                    opts = ["okay", "yes", "interesting!", "important!","idea!", "so?", "how?", "why?", "needs review", "needs research", "didn't get", "custom", "remove"]
-                    save_obj(opts, "nod_opts", "")
-
-                ni = select_box(nod_win, opts, ni)
-                if ni >= 0:
-                    _nod = opts[ni]
-                    if _nod == "custom":
-                        custom_nod,_ = minput(win_info, 0, 1, "Enter a note or a nod (<Esc> to cancel):") 
-                        _nod = custom_nod if custom_nod != "<ESC>" else ""
-                        if _nod != "":
-                            opts.append(_nod)
-                            save_obj(opts, "nod_opts", "")
+                tmp_nod = sel_nod(ypos, left, ni)
+                if tmp_nod != 'NULL':
+                    _nod = tmp_nod
                     nod_set = True
-                    nods_changed = True
+                    art_changed = True
 
-                clear_screen(nod_win)
-            if ch == cur.KEY_DOWN:
-                if nods[si] == "okay":
-                    nods[si] = ""
             if ch == cur.KEY_LEFT or ch == cur.KEY_RIGHT:  
                 for ii in range(bmark, si + 1):
                     if ii < si:
-                        passable[ii] = True
+                        nods[ii] = "next"
                     if _nod == "remove":
                         visible[ii] = False
                 if visible[si] and (nods[si] == "" or nod_set):
@@ -1021,32 +1084,37 @@ def show_article(art, show_nod=""):
 
                 rtime[si] = (tries, reading_time)
             can_inc = True
-            next_sect_start = total_sents
-            if sc + 1 < sects_num:
-                next_sect_start = art["sections"][sc +1]["sents_offset"]
-            if ch == cur.KEY_DOWN and (si + 1 >= next_sect_start or si - bmark >= 4):
+            next_frag_start = frags_sents[fc + 1][0] if fc+1 < total_frags else total_sents 
+            if ch == cur.KEY_DOWN and ((si - bmark) >= 2 or si + 1 >= next_frag_start):
                 can_inc = False
             if si < total_sents - 1:
-                if nods[si+1] != "":
+                if nods[si] != "" and nods[si] != "next":
                     can_inc = True
+                    nod_set = True
             if si  < total_sents - 1 and can_inc:
-                if ch == cur.KEY_DOWN or ch == cur.KEY_RIGHT or nod_set:
+                if ch == cur.KEY_DOWN: # or ch == cur.KEY_RIGHT or nod_set:
                     si += 1
-                    while (visible[si] == False or passable[si] == True) and si < total_sents -1:
+                    while (not visible[si] or passable[si] or nods[si]=="next") and si < total_sents - 1:
                         si += 1
                     
-                if ch != cur.KEY_DOWN: 
+                if ch == cur.KEY_DOWN and nod_set:
                     bmark = si
+                    while bmark >=0 and nods[bmark - 1] == "next":
+                        bmark -= 1
             else:
                 cur.beep()
-                show_info("Please use left or right arrow keys to go to the next sentnce.")
+                show_info("Please use left or right arrow keys to nod the sentnce.")
                 if si > total_sents - 1:
                     si = total_sents - 1
         if ch == cur.KEY_UP or chr(ch) == '5':
             if si > 0: 
                 si -= 1
-                while visible[si] == False and si > 0:
+                while (not visible[si] or passable[si]) and si > 0:
                     si -= 1
+                if bmark >= si:
+                    bmark = si
+                    while bmark >=0 and nods[bmark - 1] == "next":
+                        bmark -= 1
             else:
                 cur.beep()
                 si = 0
@@ -1055,22 +1123,27 @@ def show_article(art, show_nod=""):
         if ch == ord('j'):
             if sc > 0:
                 sc -= 1
-                fc = art["sections"][sc]["frags_offset"]
+                fc = art["sections"][sc]["frags_offset"] + 1 
                 update_si = True
             else:
                 cur.beep()
                 sc = 0
         if ch == ord('k'):
-            if sc < sects_num - 1:
+            if sc < total_sects - 1:
                 sc += 1
-                fc = art["sections"][sc]["frags_offset"]
+                fc = art["sections"][sc]["frags_offset"] + 1
                 update_si = True
             else:
                 cur.beep()
-                sc = sects_num -1
+                sc = total_sects -1
+                fc = art["sections"][sc]["frags_offset"] + 1
+                update_si = True
         if ch == ord(';'):
             if fc < total_frags - 1:
                 fc += 1
+                _tmp = frags_sents[fc][0]
+                if passable[_tmp]:
+                    fc += 1
                 update_si = True
             else:
                 cur.beep()
@@ -1078,6 +1151,9 @@ def show_article(art, show_nod=""):
         if ch == ord('l'):
             if fc > 0 :
                 fc -= 1
+                _tmp = frags_sents[fc][0]
+                if passable[_tmp]:
+                    fc -= 1
                 update_si = True
             else:
                 cur.beep()
@@ -1095,7 +1171,6 @@ def show_article(art, show_nod=""):
             else:
                 cur.beep()
 
-
         if ch == cur.KEY_PPAGE:
             si = max(si - 10, 0)
             bmark = si
@@ -1104,16 +1179,21 @@ def show_article(art, show_nod=""):
             bmark = si
         elif ch == cur.KEY_HOME:
             si = 0
+            bmark = si
         elif ch == cur.KEY_END:
             si = total_sents -1 
+            bmark = si
+
+        if si < bmark:
+            bmark = si
 
         if update_si:
             fc = max(fc, 0)
-            fc = min(fc, total_frags -1)
-            si = frags_sents[fc][0]
-            bmark = si
+            fc = min(fc, total_frags-1)
+            bmark = frags_sents[fc][0]
+            si = frags_sents[fc+1][0]-1 if fc+1 < total_frags else total_sents - 1
         c = 0 
-        while c < sects_num  and si >= art["sections"][c]["sents_offset"]:
+        while c < total_sects  and si >= art["sections"][c]["sents_offset"]:
             c += 1
         sc = max(c - 1,0)
         f = 0
@@ -1122,13 +1202,11 @@ def show_article(art, show_nod=""):
         fc = max(f - 1,0)
 
         art['sections'][sc]['fc'] = fc 
-        if si < bmark:
-            bmark = si
         if ch == ord(':'):
             _comment,_ = minput(win_info, 0, 1, ":", default = comments[si]) 
             show_info(main_info)
             _comment = _comment if _comment != "<ESC>" else ""
-            comments_changed = True
+            art_changed = True
             comments[si] = _comment
 
         if ch == ord('t'):
@@ -1170,10 +1248,10 @@ def show_article(art, show_nod=""):
 
                     save_obj(saved_articles, "saved_articles", "articles")
             text_win.erase()
-            text_win.refresh(0,0, 2,0, rows -2, cols)
-        if ch == ord('f'):
+            text_win.refresh(0,0, 2,0, rows -2, cols -1)
+        if ch == ord('f'): # show figures
             ypos = 5
-            fig_win = cur.newwin(8, width, ypos + 2, left - 2)
+            fig_win = cur.newwin(8, width, ypos + 2, left)
             fig_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
             fig_win.border()
             opts = []
@@ -1184,17 +1262,14 @@ def show_article(art, show_nod=""):
                 if not caption.startswith("Figure"):
                    caption = "Figure " + str(fig_num) + ":" + caption
                 opts.append(caption)
-            fi = select_box(fig_win, opts, fi, True)
+
+            fi = select_box(fig_win, opts, fi, in_row = False)
             if fi >= 0:
-               url = figures[fi]["id"]
-               if not url.startswith("http"):
-                   url = "https://dimsum.eu-gb.containers.appdomain.cloud/api/media/" + url
-               caption = figures[fi]["caption"]
-               fname = "nodreader_temp.html"
-               with open(fname, "w") as f:
-                   print(f"<html><body><center><div style='padding:30px'><img src={url} /><div style='padding:20px; font-size:22px'><strong>{caption}</strong></div><div></center></body></html>", file=f)
-               
-               webbrowser.open(fname)
+                fname = app_path + "/nodreader_temp.html" 
+                if not figures_created:
+                    create_figures_file(figures, fname)
+                    figures_created = True
+                webbrowser.open("file://" + fname + "#fig" + str(fi))
         if ch == ord('m'):
             choice = '' 
             while choice != 'q':
@@ -1209,17 +1284,61 @@ def show_article(art, show_nod=""):
             art["comments"] = comments
             if show_nod == "":
                 art["visible"] = visible
-            if nods_changed or comments_changed:
+            if art_changed:
                 insert_article(saved_articles, art)
                 save_obj(saved_articles, "saved_articles", "articles")
-            last_visited = load_obj("last_visited", "articles")
+            last_visited = load_obj("last_visited", "articles", [])
             insert_article(last_visited, art)
             save_obj(last_visited, "last_visited", "articles")
     return "" 
 
+def create_figures_file(figures, fname):
+    html = """
+        <html>
+        <head>
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                }
+                .caption {
+                    font-size:24px;
+                    font-weight:400;
+                    line-height:28px;
+                    padding:2% 10% 10% 10%;
+                }
+                .imgbox {
+                    display: grid;
+                    height:75%;
+                    margin:2% 10% 2% 10%;
+                }
+                .center-fit {
+                    max-width: 100%;
+                    max-height: 100vh;
+                    margin: auto;
+                }
+            </style>
+        </head>
+        <body>
+    """
+    for fnum, fig in enumerate(figures):
+       url = fig["id"]
+       if not url.startswith("http"):
+           url = "https://dimsum.eu-gb.containers.appdomain.cloud/api/media/" + url
+       caption = fig["caption"]
+       html += """
+            <div class="imgbox" id='fig""" + str(fnum) +  """'>
+                <img class="center-fit" src='""" + url + """'>
+            </div>
+            <div class="caption">""" + caption + """</div>
+       """
+    html += "</body></html>"    
+    with open(fname, "w") as f:
+       print(html, file=f)
+
 def refresh_menu(menu, menu_win, sel, options, shortkeys, subwins):
     global clG
-    clear_screen(menu_win)
+    menu_win.erase()
     row = 3 
     col = 5
     _m = max([len(x) for x in menu.keys()]) + 5  
@@ -1236,11 +1355,11 @@ def refresh_menu(menu, menu_win, sel, options, shortkeys, subwins):
            color = ITEM_COLOR
        if k.startswith("sep"):
            if v:
-               print_there(row, col,  str(v) + colon, menu_win, color)
+             print_there(row, col,  str(v) + colon, menu_win, color)
        else:
            print_there(row, col, "{:<{}}".format(key, _m), menu_win, color, attr = cur.A_BOLD)
            if v != "button" and not k in subwins:
-               print_there(row, gap, colon, menu_win, color, attr = cur.A_BOLD)
+             print_there(row, gap, colon, menu_win, color, attr = cur.A_BOLD)
 
        if v != "button" and not k in subwins:
            if "color" in k:
@@ -1249,6 +1368,7 @@ def refresh_menu(menu, menu_win, sel, options, shortkeys, subwins):
                print_there(row, col + _m + 2, "{}".format(v), menu_win, TEXT_COLOR)
 
        row += 1
+    menu_win.refresh()
     for k, item in subwins.items():
        sub_menu_win = menu_win.subwin(item["h"],
                 item["w"],
@@ -1268,13 +1388,37 @@ def show_info(msg, color=INFO_COLOR, bottom = True):
     if bottom:
         win_info = cur.newwin(1, cols, rows-1,0) 
     else:
-        win_info = cur.newwin(rows-4, 2*cols//3, 2, cols//6) 
+        win_info = cur.newpad(rows*2, 2*cols // 3)
     win_info.bkgd(' ', cur.color_pair(color)) # | cur.A_REVERSE)
     win_info.erase()
-    if bottom and len(msg) > cols - 15:
-        msg = msg[:(cols - 16)] + "..."
-    print_there(0,1," {} ".format(msg), win_info, color)
-    win_info.clrtoeol()
+    if bottom:
+        if len(msg) > cols - 15:
+            msg = msg[:(cols - 16)] + "..."
+        print_there(0,1," {} ".format(msg), win_info, color)
+        win_info.clrtoeol()
+        win_info.refresh()
+    else:
+        left = cols//6
+        start_row = 0
+        ch = 0
+        while ch != ord('q'):
+            win_info.erase()
+            mprint("Press q to return,  down and up keys to see the complete message", win_info, color)
+            mprint(msg, win_info, color)
+            start_row = max(start_row, 0)
+            start_row = min(start_row, 2*rows)
+            win_info.refresh(start_row,0, 2,left, rows -2, cols-1)
+            ch = get_key(std)
+            if ch == cur.KEY_UP:
+                if start_row > 0:
+                    start_row -= 10
+                else:
+                    cur.beep()
+            elif ch == cur.KEY_DOWN:
+                if start_row < rows*2 - 10:
+                    start_row += 10
+                else:
+                    cur.beep()
 
 def show_msg(msg, color=MSG_COLOR):
    show_info(msg + " press any key", color)
@@ -1288,8 +1432,8 @@ def show_err(msg, color=ERR_COLOR, bottom = True):
 def load_preset(new_preset, options, folder=""):
     menu = load_obj(new_preset, folder)
     if menu == None and folder == "theme":
-        dark ={'preset': 'dark',"sep1":"colors", 'text-color': '247', 'back-color': '234', 'item-color': '71', 'cur-item-color': '101', 'sel-item-color': '33', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'153', "inverse-highlight":"True", "bold-highlight":"True"}
-        light = {'preset': 'light',"sep1":"colors", 'text-color': '233', 'back-color': '243', 'item-color': '18', 'cur-item-color': '235', 'sel-item-color': '111', 'title-color': '17', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'119', "inverse-highlight":"True","bold-highlight":"True"}
+        dark ={'preset': 'dark',"sep1":"colors", 'text-color': '247', 'back-color': '-1', 'item-color': '71', 'cur-item-color': '236', 'sel-item-color': '33', 'title-color': '28', "sep2":"reading mode","faint-color":'241' ,"highlight-color":'238', "inverse-highlight":"True", "bold-highlight":"False"}
+        light = {'preset': 'light',"sep1":"colors", 'text-color': '233', 'back-color': '250', 'item-color': '22', 'cur-item-color': '24', 'sel-item-color': '25', 'title-color': '17', "sep2":"reading mode","faint-color":'239' ,"highlight-color":'24', "inverse-highlight":"True","bold-highlight":"False"}
         for mm in [dark, light]:
            mm["save as"] = "button"
            mm["reset"] = "button"
@@ -1297,7 +1441,7 @@ def load_preset(new_preset, options, folder=""):
            mm["save and quit"] = "button"
         save_obj(dark, "dark", "theme")
         save_obj(light, "light", "theme")
-        new_preset = "dark"
+        new_preset = "light"
 
     if menu == None and folder == "template":
        text  = {"preset":"txt", "top":"", "title":"# {title}", "section-title":"## {section-title}","paragraph": "{paragraph}{newline}{newline}", "bottom":"{url}"}
@@ -1323,25 +1467,44 @@ def load_preset(new_preset, options, folder=""):
     save_obj(conf, "conf", "")
     return menu, options
 
-def select_box(win, opts, ni, on_enter = False):
+def select_box(win, in_opts, ni, in_row = False):
     ch = 0
     win.border()
+    opts = []
+    for i,k in enumerate(in_opts):
+        opts.append(str(i) + ") " + k)
+    row_cap = 3 if in_row else 1
     while ch != 27 and ch != ord('q'):
         ni = max(ni, 0)
         ni = min(ni, len(opts)-1)
-        clear_screen(win)
-        show_submenu(win, opts, ni)
+        win.erase()
+        if not in_row:
+            show_submenu(win, opts, ni, color = INFO_COLOR)
+        else:
+            for i,k in enumerate(opts):
+                row = i // row_cap
+                col = (i % row_cap)*17
+                if i == ni:
+                    _color = CUR_ITEM_COLOR
+                else:
+                    _color = INFO_COLOR
+                print_there(row, col, k, win, _color)
+            win.refresh()
         ch = get_key(std)
-        if ch == cur.KEY_LEFT or (on_enter and (ch == cur.KEY_ENTER or ch == 10 or ch == 13)):
+        if ch == cur.KEY_ENTER or ch == 10 or ch == 13:
            return ni
-        if ch == cur.KEY_RIGHT:
-           return -1
+        if chr(ch).isdigit():
+            return int(chr(ch))
         if ch == ord('d'):
             opts.pop(ni)
-        if ch == cur.KEY_UP:
-            ni -= 1
         elif ch == cur.KEY_DOWN:
+            ni += row_cap
+        elif ch == cur.KEY_UP:
+            ni -= row_cap
+        elif ch == cur.KEY_RIGHT:
             ni += 1
+        elif ch == cur.KEY_LEFT:
+            ni -= 1
         elif ch != 27 and ch != ord('q'):
             cur.beep()
             show_info("Use left arrow key to select the item, the right key or q to cancel!")
@@ -1349,7 +1512,7 @@ def select_box(win, opts, ni, on_enter = False):
     return -1
     
 
-def show_submenu(sub_menu_win, opts, si, is_color = False):
+def show_submenu(sub_menu_win, opts, si, is_color = False, color = ITEM_COLOR):
    win_rows, win_cols = sub_menu_win.getmaxyx()
    win_rows = min(win_rows-3, 10)
    start = si - win_rows // 2
@@ -1357,7 +1520,7 @@ def show_submenu(sub_menu_win, opts, si, is_color = False):
    if len(opts) > win_rows:
  	  start = min(start, len(opts)-win_rows)
    if start > 0:
- 	  mprint("...", sub_menu_win, cW)
+ 	  mprint("...", sub_menu_win, color)
    footer = ""
    for vi, v in enumerate(opts[start:start + win_rows]):
      if start + vi == si:
@@ -1366,18 +1529,18 @@ def show_submenu(sub_menu_win, opts, si, is_color = False):
            footer = v
            v = v[:win_cols - 5] + "..."
         if is_color:
-            mprint("{:^8}".format(">" + str(v)), sub_menu_win, int(v), attr = cur.A_REVERSE) 
+           mprint(" {:^8}".format(">" + str(v)), sub_menu_win, int(v), attr = cur.A_REVERSE) 
         else:
-            mprint("{:<8}".format(str(v)),sub_menu_win, CUR_ITEM_COLOR)
+           mprint(" {:<8}".format(str(v)),sub_menu_win, CUR_ITEM_COLOR)
      else:
         if len(v) > win_cols:
            v = v[:win_cols - 5] + "..."
         if is_color:
-            mprint("{:^8}".format(v), sub_menu_win, int(v), attr = cur.A_REVERSE) 
+           mprint(" {:^8}".format(v), sub_menu_win, int(v), attr = cur.A_REVERSE) 
         else:
-            mprint("{:<8}".format(str(v)), sub_menu_win, ITEM_COLOR)
+           mprint(" {:<8}".format(str(v)), sub_menu_win, color)
    if start + win_rows < len(opts):
- 	  mprint("...", sub_menu_win, cW)
+ 	  mprint("...", sub_menu_win, color)
    # if footer != "":
    #   mprint(footer, sub_menu_win, cW)
    sub_menu_win.refresh()
@@ -1393,7 +1556,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
 
     rows, cols = std.getmaxyx()
     height = rows -1  
-    width = cols 
+    width = cols  
 
     menu_win = cur.newwin(height, width, 0, 0)
     common_subwin = menu_win.subwin(5, width//2 + 5)
@@ -1428,13 +1591,13 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
         key_set = False
         cmd = ""
         if not sel.startswith("sep"):
-            clear_screen(sub_menu_win)
+            sub_menu_win.erase()
             if mode == 'm':
                 refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
         if sel not in options and menu[sel] != "button" and not sel.startswith("sep"): 
              # menu[sel]=""
             cur_val = menu[sel]
-            refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
+            #refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
             _m = max([len(x) for x in menu.keys()]) + 5  
             val, ch = minput(menu_win,row + mi, col, "{:<{}}".format(sel,_m) + ": ", default=menu[sel]) 
             if val != "<ESC>":
@@ -1476,6 +1639,10 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
             prev_ch = ch
             ch = get_key(std)
             
+        if ch == cur.KEY_RESIZE:
+            cur.beep()
+            refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
+
         if ch == cur.KEY_DOWN:
             if mode == "m":
                 mi += 1
@@ -1520,8 +1687,8 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
                 if last_preset.strip() != "":
                     save_obj(menu, last_preset, title)
                 menu[sel] = options[sel][si]
-                if "preset" in menu and title == "theme":
-                    reset_colors(menu)
+                #if "preset" in menu and title == "theme":
+                #    reset_colors(menu)
                 if sel == "preset":
                     new_preset = menu[sel]
                     menu,options = load_preset(new_preset, options, title)
@@ -1544,9 +1711,9 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
         elif ch == cur.KEY_LEFT or ch == 27:
             if old_val != "":
                 menu[sel] = old_val
-                refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
-                if "color" in sel:
-                    reset_colors(menu)
+                #refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
+                #if "color" in sel:
+                #    reset_colors(menu)
             old_val = ""
             mode = 'm'
             mt = ""
@@ -1586,7 +1753,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
         elif (ch == ord('r') or cmd == "reset") and "preset" in menu:
             menu, options = load_preset("resett", options, title)
             last_preset = menu["preset"]
-            refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
+            #refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
             show_info("Values were reset to defaults")
         elif (ch == ord('s') or cmd == "save as") and "preset" in menu:
             fname,_ = minput(win_info, 0, 1, "Save as:") 
@@ -1608,7 +1775,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
         elif ch != ord('q') and chr(ch) in shortkeys:
             mi = list(menu.keys()).index(shortkeys[chr(ch)])
             sel,mi = get_sel(menu, mi)
-            refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
+            #refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
             if menu[sel] == "button":
                 return sel, menu, mi
             old_val = menu[sel]
@@ -1633,12 +1800,21 @@ def start(stdscr):
     global template_menu, template_options, theme_options, theme_menu, std, conf, query, filters
 
     std = stdscr
+    logging.info(f"curses colors: {cur.COLORS}")
+
+    nr_options = load_obj("options", "")
+    if os.name == "nt" and nr_options != None and "font size" in nr_options:
+        ret = resize_font_on_windows(int(nr_options["font size"]), std)
+        if ret != "":
+            logging.info(ret)
+
     # mouse = cur.mousemask(cur.ALL_MOUSE_EVENTS)
     cur.start_color()
-    # cur.curs_set(0) 
+    cur.curs_set(0) 
     # std.keypad(1)
     cur.use_default_colors()
-
+    # sys.stdout.write("\x1b[8;{rows};{cols}t".format(rows=24, cols=112))
+    rows, cols = std.getmaxyx()
     filters = {}
     now = datetime.datetime.now()
     filter_items = ["year", "conference", "dataset", "task"]
@@ -1646,14 +1822,14 @@ def start(stdscr):
     isFirst = False
     if menu is None:
         isFirst = True
-        if npaper:
+        if newspaper_imported:
             menu = {"search articles":"button", "website articles":"button", "webpage":"button",
                     "tagged articles":"button", "nods":"button", "comments":"button",
-                    "text files":"button","options":"button","sep3":"","recent articles":""}
+                    "text files":"button","options":"button","sep3":""}
         else:
             menu = {"search articles":"button", 
                     "tagged articles":"button", "nods":"button", "comments":"button",
-                    "text files":"button","options":"button","sep3":"","recent articles":""}
+                    "text files":"button","options":"button","sep3":""}
 
     options = {
             "saved articles":["None"],
@@ -1662,14 +1838,16 @@ def start(stdscr):
 
 
 
-    last_visited = load_obj("last_visited", "articles")
-    if last_visited is None:
-        last_visited = []
+    last_visited = load_obj("last_visited", "articles", [])
     recent_arts = []
+    width = 2*cols//3
+    height = 12
     for art in last_visited[:10]:
         recent_arts.append(art["title"][:60]+ "...")
-    subwins = {"recent articles":{"x":7,"y":13,"h":8,"w":68}}
-    options["recent articles"] =recent_arts 
+    subwins = {"recent articles":{"x":7,"y":height,"h":8,"w":width}}
+    if recent_arts:
+        menu["recent articles"] = ""
+        options["recent articles"] =recent_arts 
 
     if isFirst:
         for opt in menu:
@@ -1681,6 +1859,9 @@ def start(stdscr):
         conf = {"theme":"default", "template":"txt"}
 
     colors = [str(y) for y in range(-1, cur.COLORS)]
+    if cur.COLORS > 100:
+        colors = [str(y) for y in range(-1, 100)] + [str(y) for y in range(112, cur.COLORS)]
+
     theme_options = {
             "preset":[],
             "text-color":colors,
@@ -1701,6 +1882,7 @@ def start(stdscr):
     reset_colors(theme_menu)
     #os.environ.setdefault('ESCDELAY', '25')
     #ESCDELAY = 25
+    std.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
     clear_screen(std)
     ch = 'a'
     shortkeys = {"c":"comments", "n":"nods", "r":"recent articles","t":"tagged articles","o":"options", "p":"webpage", "s":"search articles","w":"website articles",'x':"text files"}
@@ -1732,17 +1914,19 @@ def start(stdscr):
                        bottom=False)
             win_info.getch()
         elif ch == 'text files':
-            text_files =  [Path(f).name for f in Path(".").glob('*.txt') if f.is_file()]
+            save_folder = os.path.expanduser('~/Documents/Nodreader')
+            text_files =  [str(Path(f)) for f in Path(save_folder).glob('*.txt') if f.is_file()]
             articles = []
             for text in text_files:
+                name = Path(text).name
                 with open(text, "r") as f:
                     data = f.read()
-                title, i = get_title(data, text)
+                title, i = get_title(data, name)
                 if i > 0:
                     data = data[i:]
-                art = {"id":text, "pdfUrl":text, "title":title, "sections":get_sects(data)}
+                art = {"id":text, "pdfUrl":name, "title":title, "sections":get_sects(data)}
                 articles.append(art)
-            ret = list_articles(articles, text)
+            ret = list_articles(articles, "text files")
         elif ch == 'w' or ch == "website articles":
              website()
         elif ch == "nods":
@@ -1751,6 +1935,7 @@ def start(stdscr):
              list_notes("comments")
         elif ch == "r" or ch == "recent articles":
              si = options["recent articles"].index(menu["recent articles"]) 
+             clear_screen(std)
              show_article(last_visited[si])
         elif ch.startswith("del@recent articles"):
             parts = ch.split("@")
@@ -1770,17 +1955,26 @@ def start(stdscr):
 def settings():
     global theme_menu
     choice = '' 
-    menu = load_obj("options", "")
+    menu = None #load_obj("options", "")
     if menu is None:
-        menu = {"theme":"button","saved folder":"", "save and quit":"button"}
+        menu = {"theme":"button","saved folder":""}
         menu["saved folder"] = os.path.expanduser('~/Documents/Nodreader')
+
+    options = {}
+    if True: #os.name == 'nt':
+        menu["font size"]=""
+        options["font size"] = [str(fs) for fs in range(18, 26)]
+
+    menu["save and quit"] = "button"
     mi = 0
     while choice != 'q':
-        choice, menu, mi = show_menu(menu, {}, title="options", shortkeys={"q":"save and quit"})  
+        choice, menu, mi = show_menu(menu, options, title="options", shortkeys={"f": "font size","q":"save and quit"})  
         if choice == "theme":
             _, theme_menu,_ = show_menu(theme_menu, theme_options, title="theme")
             save_obj(theme_menu, conf["theme"], "theme")
-    save_obj(menu, "options","")
+        if choice == "font size":
+            resize_font_on_windows(int(menu["font size"]), std)
+            init
 
 def list_notes(notes = "nods"):
     clear_screen(std)
@@ -1839,6 +2033,8 @@ def refresh_tags():
     art_list = {}
     tag_list = []
     for art in saved_articles:
+        if not "tags" in art:
+            continue
         for tag in art["tags"]:
             tag = tag.strip()
             if not tag in tag_list:
@@ -1932,7 +2128,7 @@ def website():
                  config.memoize_articles = False
                  try:
                      site = newspaper.build(site_addr, memoize_articles = False) # config)
-                     # logging.info(site.article_urls())
+                     # logger.info(site.article_urls())
                      # site.download()
                      # site.generate_articles()
                  except Exception as e:
