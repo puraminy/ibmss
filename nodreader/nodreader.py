@@ -1555,7 +1555,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
     mode = 'm' # 'm' means we are in menu, 's' means we are in submenu
 
     rows, cols = std.getmaxyx()
-    height = rows -1  
+    height = rows - 1  
     width = cols  
 
     menu_win = cur.newwin(height, width, 0, 0)
@@ -1802,12 +1802,6 @@ def start(stdscr):
     std = stdscr
     logging.info(f"curses colors: {cur.COLORS}")
 
-    nr_options = load_obj("options", "")
-    if os.name == "nt" and nr_options != None and "font size" in nr_options:
-        ret = resize_font_on_windows(int(nr_options["font size"]), std)
-        if ret != "":
-            logging.info(ret)
-
     # mouse = cur.mousemask(cur.ALL_MOUSE_EVENTS)
     cur.start_color()
     cur.curs_set(0) 
@@ -1973,7 +1967,7 @@ def settings():
             _, theme_menu,_ = show_menu(theme_menu, theme_options, title="theme")
             save_obj(theme_menu, conf["theme"], "theme")
         if choice == "font size":
-            resize_font_on_windows(int(menu["font size"]), std)
+            resize_font_on_windows(int(menu["font size"])) # std)
             init
 
 def list_notes(notes = "nods"):
@@ -2321,7 +2315,22 @@ def search():
     save_obj(menu, "query_menu", "")
 
 def main():
+    nr_options = load_obj("options", "")
+    if os.name == "nt":
+        maximize_console(29)       
+        if nr_options != None:
+            fsize =int(nr_options["font size"]) if "font size" in nr_options else 24 
+            if fsize > 24:
+                fsize = 24
+            ret = resize_font_on_windows(fsize) #, std)
+            if ret != "":
+                logging.info(ret)
+
     wrapper(start)
+    if os.name == "nt" and nr_options != None and "font size" in nr_options:
+        ret = resize_font_on_windows(24) #, std)
+        if ret != "":
+            logging.info(ret)
 
 if __name__ == "__main__":
     main()
