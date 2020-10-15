@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 REQUIREMENTS = [i.strip() for i in open("requirements.txt").readlines()]
 setuptools.setup(
     name="nodreader-pouramini", # Replace with your own username
-    version="0.0.1",
+    version="0.0.33",
     author="A Pouramini",
     author_email="pouramini@gmail.com",
     description="Nodreader, a text-based article reader and manager",
@@ -14,7 +14,14 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/puraminy/nodreader",
     packages=setuptools.find_packages(),
-    install_requires=REQUIREMENTS
+    entry_points={
+        'console_scripts': [
+            'nodreader = nodreader.nodreader:main',
+            'nr_resize = nodreader.resize:main',
+            'nr_resize2 = nodreader.resize2:main',
+        ],
+    },
+    install_requires=REQUIREMENTS,
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
