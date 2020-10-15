@@ -14,13 +14,6 @@ if os.name == 'nt':
 
     from ctypes import wintypes
 
-def fix_borders():
-
-    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-    hWnd = kernel32.GetConsoleWindow()
-    kernel32.SetWindowLong(hWnd, GWL_STYLE, 
-            kernel32.GetWindowLong(consoleWindow, GWL_STYLE) & ~WS_MAXIMIZEBOX & ~WS_SIZEBOX)
-
 
 def maximize_console(lines=None):
     kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
@@ -29,6 +22,7 @@ def maximize_console(lines=None):
     user32.ShowWindow(hWnd, 1)
     subprocess.check_call('mode.com con cols={} lines={}'.format(
                                 124, 29))
+    user32.ShowWindow(hWnd, 1)
 
 
     #kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)

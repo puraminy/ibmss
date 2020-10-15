@@ -2322,7 +2322,7 @@ def main():
     nr_options = load_obj("options", "")
     if os.name == "nt":
         maximize_console(29)       
-        fix_borders()
+        fix_
         if nr_options != None:
             fsize =int(nr_options["font size"]) if "font size" in nr_options else 24 
             if fsize > 24:
