@@ -9,27 +9,26 @@ if os.name == 'nt':
     from ctypes import POINTER, WinDLL, Structure, sizeof, byref
     from ctypes.wintypes import BOOL, SHORT, WCHAR, UINT, ULONG, DWORD, HANDLE
 
-    import msvcrt
     import subprocess
+    import msvcrt
+    import win32gui, win32con
 
     from ctypes import wintypes
 
 def fix_borders():
-
     kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     hWnd = kernel32.GetConsoleWindow()
-    kernel32.SetWindowLong(hWnd, GWL_STYLE, 
-            kernel32.GetWindowLong(consoleWindow, GWL_STYLE) & ~WS_MAXIMIZEBOX & ~WS_SIZEBOX)
+    win32gui.SetWindowLong(hWnd, win32con.GWL_STYLE, 
+            win32gui.GetWindowLong(hWnd, win32com.GWL_STYLE) & win32con.WS_MAXIMIZEBOX & win32con.WS_SIZEBOX)
 
 
 def maximize_console(lines=None):
-    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-    hWnd = kernel32.GetConsoleWindow()
-    user32 = ctypes.WinDLL('user32', use_last_error=True)
-    user32.ShowWindow(hWnd, 1)
-    subprocess.check_call('mode.com con cols={} lines={}'.format(
-                                124, 29))
-
+    if os.name == "nt":
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+        hWnd = kernel32.GetConsoleWindow()
+        user32 = ctypes.WinDLL('user32', use_last_error=True)
+        user32.ShowWindow(hWnd, 1)
+        subprocess.check_call('mode.com con cols=124 lines=29')
 
     #kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     #user32 = ctypes.WinDLL('user32', use_last_error=True)
