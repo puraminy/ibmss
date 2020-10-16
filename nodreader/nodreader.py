@@ -2317,11 +2317,11 @@ def search():
     save_obj(menu, "query_menu", "")
 
 def main():
-    orig_size = resize_font_on_windows(20, True)
-    orig_size = int(orig_size) if str(orig_size).isdigit() else 20
     nr_options = load_obj("options", "")
+    maximize_console(29)       
     if os.name == "nt":
-        maximize_console(29)       
+        orig_size = resize_font_on_windows(20, True)
+        orig_size = int(orig_size) if str(orig_size).isdigit() else 20
         fix_borders()
         if nr_options != None:
             fsize =int(nr_options["font size"]) if "font size" in nr_options else 24 
@@ -2331,7 +2331,7 @@ def main():
             if ret != "":
                 logging.info(ret)
     wrapper(start)
-    if os.name == "nt" and nr_options != None and "font size" in nr_options:
+    if os.name == "nt":
         ret = resize_font_on_windows(orig_size) 
         if ret != "":
             logging.info(ret)
