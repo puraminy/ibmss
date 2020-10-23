@@ -45,6 +45,7 @@ Sometimes you want to add a comment to the selected fragment. To do this, press 
 
 Nodreader has many other features, which you can discover when you work with it. Some other hotkeys are listed below. They are accessible when you open an article. You can hit h to see the following list. 
 
+```
  Down)          expand the selection to the next sentence
  Right)         nod the selected sentences with "okay"
  Left)          select from other nods
@@ -66,6 +67,7 @@ Nodreader has many other features, which you can discover when you work with it.
  PgUp/PgDown)   previous/next page
  h)             show this list
  q)             close
+```
 
 
 ## working with menus and input boxes
