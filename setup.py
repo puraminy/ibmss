@@ -5,8 +5,8 @@ with open("README.md", "r") as fh:
 
 REQUIREMENTS = [i.strip() for i in open("requirements.txt").readlines()]
 setuptools.setup(
-    name="nodreader-pouramini", # Replace with your own username
-    version="0.0.33",
+    name="nodreader", # Replace with your own username
+    version="0.0.1",
     author="A Pouramini",
     author_email="pouramini@gmail.com",
     description="Nodreader, a text-based article reader and manager",
