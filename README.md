@@ -7,7 +7,7 @@ However, the main goal of Nodreader is to provide a new experience of study. The
 # How to install
 
 ```
-pip install Nodreader
+pip install nodreader
 ```
 
 ## Nods
