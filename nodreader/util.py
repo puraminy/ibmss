@@ -11,7 +11,6 @@ if os.name == 'nt':
 
     import subprocess
     import msvcrt
-    import win32gui, win32con
 
     from ctypes import wintypes
 
@@ -234,8 +233,8 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
     cur.echo() 
     stdscr.keypad(True)
     stdscr.addstr(row, col, prompt_string)
-    stdscr.refresh()
     stdscr.clrtoeol()
+    stdscr.refresh()
     inp = str(default)
     pos = len(inp)
     ch = 0
@@ -250,7 +249,7 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
         xloc = xloc % cols
         stdscr.move(yloc, xloc)
         ch = stdscr.getch()
-        if ch == 127 or ch == cur.KEY_BACKSPACE:
+        if ch == 8 or ch == 127 or ch == cur.KEY_BACKSPACE:
             if pos > 0:
                 inp = inp[:pos-1] + inp[pos:]
                 pos -= 1
