@@ -80,7 +80,7 @@ Nodreader has many other features, which you can discover when you work with it.
 Use <Down> or <Up> keys to navigate between the items of a menu. Optionally, you can press the hotkey associated with each item which is shown at the beginning of that option. Press <Enter> to open or run a menu item. Some items are input boxes to get an input from the user. To escape an input box, you can either use <Esc> or simply <Down> key to go to the next item. Another useful key in the input box is left angle bracket (<) which clears the entire input box.
 
 
-## Access to website articles or opening a webpage
+## Accessing website articles or opening a webpage
 
 If you want to fetch and read the articles of a website, or a specific webpage, you can install `newspaper3k`. 
 
@@ -88,7 +88,7 @@ If you want to fetch and read the articles of a website, or a specific webpage, 
 pip install newspaper3k
 ```
 
-Then, when you start Nodreader, two new options are added to the main menu, namely 'website articles' and 'webpage'.  
+Then, when you start Nodreader, two new options are added to the main menu, namely `website articles` and `webpage`.  
  
  
 
