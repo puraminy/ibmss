@@ -2,7 +2,7 @@
 
 Using Nodreader you can search and study scientific papers or any other article.
 You can also manage your articles and the pdf files associated with them.
-However, the main goal of Nodreader is to provide a new experience of study. The program is text-based and relies mainly on the keyboard. The program offers you the summaries of the articles when you want to concentrate on the purpose and main ideas within the article. You can also view the figures of the article in a browser. If you want, you can download and open the original pdf file for each article.
+However, the main goal of Nodreader is to provide a new experience of study. The program is text-based and relies mainly on the keyboard. The program offers you the summaries of the articles when you want to concentrate on the purpose and main ideas within the article. You can also view the figures of the article in a browser. If you want to access the original article, you can download and open the original pdf file for each article.
 
 ## Installation
 
@@ -18,7 +18,7 @@ pip install windows-curses nodreader
 
 ## Nods
 Nods are feedbacks you give to a sentence or a portion of text. It resembles the way you listen to the talks of a lecturer. You may admit what you've heard with 'okay, yes, etc.' or you may have a problem in getting the purpose of a sentence.
-When you open an article and start reading, Nodreader automatically highlights the first sentence of an article. To expand the selection to more sentences press the <Down> arrow key. After selecting and reading a fragment of text (a paragraph or a certain number of sentences) you need to provide a Nod to be able to move to the next part. 
+When you open an article and start reading, Nodreader automatically highlights the first sentence of an article. To expand the selection to more sentences press the `<Down>` arrow key. After selecting and reading a fragment of text (a paragraph or a certain number of sentences) you need to provide a Nod to be able to move to the next part. 
 
 Example of nodes are:
 
@@ -39,7 +39,7 @@ And some other nods.
 
 ### How to enter a nod
 
-Since 'okay' is supposed a common nod, you can press the <Right> arrow key to enter it and then you can press the <Down> arrow key again to move to the next sentence. To enter other nods, you need to press the <Left> arrow key and select a Nod from a list. In any window or section press q to exit that section. 
+Since `okay` is supposed the common nod, you can press the `<Right>` arrow key to enter it and then you can press the `<Down>` arrow key again to move to the next sentence. To enter other nods, you need to press the `<Left>` arrow key and select a Nod from a list. In any window or section press q to exit that section. 
 
 ## Comments
 
@@ -75,7 +75,7 @@ Nodreader has many other features, which you can discover when you work with it.
 
 ###  working with menus and input boxes
 
-Use <Down> or <Up> keys to navigate between the items of a menu. Optionally, you can press the hotkey associated with each item which is shown at the beginning of that option. Press <Enter> to open or run a menu item. Some items are input boxes to get an input from the user. To escape an input box, you can either use <Esc> or simply <Down> key to go to the next item. Another useful key in the input box is left angle bracket (<) which clears the entire input box.
+Use `<Down>` or `<Up>` keys to navigate between the items of a menu. Optionally, you can press the hotkey associated with each item which is shown at the beginning of that option. Press `<Enter>` to open or run a menu item. Some items are input boxes to get an input from the user. To escape an input box, you can either use `<Esc>` or simply `<Down>` key to go to the next item. Another useful key in the input box is left angle bracket (<) which clears the entire input box.
 
 
 ## Accessing website articles or opening a webpage
