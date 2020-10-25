@@ -6,6 +6,7 @@ However, the main goal of Nodreader is to provide a new experience of study. The
 
 ## Installation
 
+Installation on linux:
 ```
 pip install nodreader
 ```
@@ -21,20 +22,17 @@ When you open an article and start reading, Nodreader automatically highlights t
 
 Example of nodes are:
 
-```
- - okay, when you have almost understood the purpose of a sentence or a fragment of the text
- - interesting!, when you found it has a useful point.
- - important!, when you think it contains an important point which can be used later.
- - idea! when an idea comes to your mind by reading the sentence.
- - definition, when you find the text an introductory or a definition for the rest of the paper.
-
- - didn't get, when you didn't get the purpose or meaning of a sentence.
- - review later, when you want to review the sentence later.
- - why, when you understand the sentence but don't get the reasoning behind it.
- - explain, when you get the sentence idea but you don't know how it's implemented.
- - needs research, when there are some points or jargons in the sentence that needs research.
+ - **okay**, when you have almost understood the purpose of a sentence or a fragment of the text
+ - **interesting!**, when you found it has a useful point.
+ - **important!**, when you think it contains an important point which can be used later.
+ - **idea!** when an idea comes to your mind by reading the sentence.
+ - **definition**, when you find the text an introductory or a definition for the rest of the paper.
+ - **didn't get**, when you didn't get the purpose or meaning of a sentence.
+ - **review later**, when you want to review the sentence later.
+ - **why**, when you understand the sentence but don't get the reasoning behind it.
+ - **explain**, when you get the sentence idea but you don't know how it's implemented.
+ - **needs** research, when there are some points or jargons in the sentence that needs research.
  - ...
-```
  
 
 And some other nods.
