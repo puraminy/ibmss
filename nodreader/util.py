@@ -11,6 +11,7 @@ if os.name == 'nt':
 
     import subprocess
     import msvcrt
+    import winsound
 
     from ctypes import wintypes
 
@@ -175,7 +176,7 @@ def print_there(x, y, text, stdscr = None, color=0, attr = None, pad = False):
     if stdscr is not None:
         c = cur.color_pair(color)
         if attr is not None:
-            c = cur.color_pair(color) | cur.A_BOLD
+            c = cur.color_pair(color) | attr
         height, width = stdscr.getmaxyx()
         #stdscr.addnstr(x, y, text, height*width-1, c)
         _len = (height*width)-x
@@ -211,11 +212,11 @@ def rinput(stdscr, r, c, prompt_string, default=""):
         return default
 
 def confirm_all(win, msg):
-    return confirm(win, msg, acc = ['y','Y','n','N','a']) 
+    return confirm(win, msg, acc = ['y','n','a']) 
 
-def confirm(win, msg, acc = ['y','Y','n','N']):
+def confirm(win, msg, acc = ['y','n']):
     c,_ = minput(win, 0, 1, 
-            "Are you sure you want to " + msg + "? (y/n/a)",
+            "Are you sure you want to " + msg + "? (" + "/".join(acc)  + ")",
             accept_on = acc)
     win.clear()
     win.refresh()
@@ -260,7 +261,7 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
                 inp = inp[:pos] + inp[pos+1:]
             else:
                 cur.beep()
-        elif chr(ch)=='\\':
+        elif chr(ch)=='<':
             inp = ""
         elif ch == cur.KEY_HOME:
             pos = 0
@@ -299,6 +300,12 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
     cur.noecho()
     hide_cursor()
     return inp,ch  
+
+def mbeep(repeat=1):
+    if os.name == "nt":
+        winsound.Beep(500, 100)
+    else:
+        cur.beep()
 
 def get_key(stdscr = None):
     return stdscr.getch()
