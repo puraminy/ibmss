@@ -29,7 +29,7 @@ Example of nodes are:
  - **definition**, when you find the text an introductory or a definition for the rest of the paper.
  - **didn't get**, when you didn't get the purpose or meaning of a sentence.
  - **review later**, when you want to review the sentence later.
- - **why**, when you understand the sentence but don't get the reasoning behind it.
+ - **why**, when you understand the sentence but you don't get the reasoning behind it.
  - **explain**, when you get the sentence idea but you don't know how it's implemented.
  - **needs** research, when there are some points or jargons in the sentence that needs research.
  - ...
