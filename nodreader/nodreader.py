@@ -2,7 +2,6 @@ import requests
 import subprocess, os, platform
 import webbrowser
 from datetime import date
-from tqdm import tqdm
 import random
 import datetime, time
 from time import sleep
@@ -29,6 +28,7 @@ import traceback
 appname = "NodReader"
 appauthor = "App"
 
+doc_path = os.path.expanduser('~/Documents/Nodreader')
 app_path = user_data_dir(appname, appauthor)
 logFilename = app_path + '/log_file.log'
 Path(app_path).mkdir(parents=True, exist_ok=True)
@@ -193,37 +193,34 @@ def openFile(filepath):
     else:
         show_err(str(filepath) + " doesn't exist, you can download it by hitting d key")
 
-def delete_file(title):
-    file_name = title.replace(' ','-')[:50] + ".pdf"#url.split('/')[-1]
-    folder = os.path.expanduser('~/Documents/Nodreader')
-    opts = load_obj("options", "")
-    if opts != None:
-       folder = opts["saved folder"] 
+def delete_file(art):
+    if "save_folder" in art:
+        fname = art["save_folder"]
+    else:
+        title = art["title"]
+        file_name = title.replace(' ','-')[:50] + ".pdf"#url.split('/')[-1]
+        folder = doc_path
+        if folder.endswith("/"):
+            folder = folder[:-1]
 
-    if folder.endswith("/"):
-        folder = folder[:-1]
-
-    fname = folder + "/" + file_name
+        fname = folder + "/" + file_name
     _file = Path(fname)
-    _confirm  = confirm(win_info, "physically delete " + file_name)
-    if _confirm == "y" and _file.is_file():
+    if _file.is_file():
         _file.unlink()
         show_info("File was deleted")
     else:
         show_info("File wasn't found on computer")
 
-def download(url, title):
+def download(url, art, folder):
     if not url.endswith("pdf"):
         webbrowser.open(url)
         return
 
+    title = art["title"]
     file_name = title.replace(' ','-')[:50] + ".pdf"#url.split('/')[-1]
 
     # Streaming, so we can iterate over the response.
-    folder = os.path.expanduser('~/Documents/Nodreader')
-    opts = load_obj("options", "")
-    if opts != None:
-       folder = opts["saved folder"] 
+    folder = doc_path + "/" + folder
 
     if folder.endswith("/"):
         folder = folder[:-1]
@@ -246,16 +243,21 @@ def download(url, title):
         response = requests.get(url, stream=True)
         total_size_in_bytes= int(response.headers.get('content-length', 0))
         block_size = 1024*10 #10 Kibibyte
-        progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True)
+        steps = total_size_in_bytes // block_size
+        step = 0
+        prog = 0
         with open(fname, 'wb') as file:
             for data in response.iter_content(block_size):
-                progress_bar.update(len(data))
+                prog = int(round(step / steps, 2)*100)
+                show_info("Downloading ... " + str(prog) + "%")
+                sleep(0.1)
+                step += 1
                 file.write(data)
-        progress_bar.close()
-        show_info("Saved at" + fname)
-        if total_size_in_bytes != 0 and progress_bar.n != total_size_in_bytes:
+        #show_info("Saved at" + fname)
+        if total_size_in_bytes != 0 and prog < 100:
             show_err("ERROR, something went wrong")
         else:
+            art["save_folder"] = fname
             openFile(_file)
 
     #text = pdfparser(file_name)
@@ -364,7 +366,7 @@ def get_sects(text):
         new_sect["fragments"] = get_frags(sects[0])
         ret.append(new_sect)
     else:
-        for sect in sects:
+        for sect in sects[1:]:
             new_sect = {}
             end = sect.find("\n")
             new_sect["title"] = sect[:end]
@@ -438,7 +440,7 @@ def list_articles(articles, fid, show_nod = False, group=""):
 
     N = len(articles)
     if N <= 0:
-        return "No result found!"
+        return "There is no article to list!"
     rows, cols = std.getmaxyx()
     main_win = cur.newpad(rows*50, cols)
     width = cols - 10
@@ -504,12 +506,12 @@ def list_articles(articles, fid, show_nod = False, group=""):
             if k > 0:
                 k -= 1
             else:
-                cur.beep()
+                mbeep()
         if ch == cur.KEY_DOWN:
             if k < N -1:
                 k +=1
             else:
-                cur.beep()
+                mbeep()
 
         if k >= start + 15 and k < N:
             ch = cur.KEY_NPAGE
@@ -547,29 +549,26 @@ def list_articles(articles, fid, show_nod = False, group=""):
             show_info(('\n'
                        ' s)          select/deselect an article\n'
                        ' a)          select all articles\n'
-                       ' t)          tag selected items\n'
-                       ' d)          delete selected items from list\n'
-                       ' w)          write selected items into file\n'
-                       ' p)          select output file format\n'
-                       ' m)          change color theme\n'
+                       ' t)          tag the selected items\n'
+                       ' d)          delete the selected items from list\n'
+                       ' w)          write the selected items into files\n'
+                       ' p)          select the output file format\n'
+                       ' m)          change the color theme\n'
                        ' HOME)       go to the first item\n'
                        ' END)        go to the last item\n'
                        ' PageUp)     previous page\n'
                        ' Arrow keys) next, previous article\n'
-                       ' q)          return back to the search menu\n'
-                       '\n\n Press any key to close ...'),
+                       ' q)          return back to the search menu\n'),
                        bottom=False)
-            win_info.getch()
         if  ch == ord('s'):
             if not articles[k] in sel_arts:
                 sel_arts.append(articles[k])
             else:
                 sel_arts.remove(articles[k])
         if ch == ord('a'):
-            sel_arts = []
             for ss in range(start,min(N, start+15)):
                   art = articles[ss]
-                  if not ss in sel_arts:
+                  if not art in sel_arts:
                       sel_arts.append(art)
                   else:
                       sel_arts.remove(art)
@@ -585,11 +584,11 @@ def list_articles(articles, fid, show_nod = False, group=""):
                     remove_tag(art, fid, saved_articles)
                     articles.remove(art)
             else:
-                _conf_all = False
+                _confirm = ""
                 for art in sel_arts:
-                    if len(art["tags"]) == 1 and not _conf_all:
-                        _confirm = confirm(win_info, " remove the last tag of " + art["title"][:20])
-                        _conf_all = _confirm == "a"
+                    if len(art["tags"]) == 1:
+                        if _confirm != "a":
+                            _confirm = confirm_all(win_info, "remove the last tag of " + art["title"][:20])
                         if _confirm == "y" or _confirm == "a":
                             remove_tag(art, fid, saved_articles)
                             articles.remove(art)
@@ -630,26 +629,26 @@ def list_articles(articles, fid, show_nod = False, group=""):
             if not sel_arts:
                 show_err("No article was selected!! Select an article using s")
             else:
-                fid,_ = minput(win_info, 0, 1," Folder name:", default = fid) 
-                for a in sel_arts: 
+                fid,_ = minput(win_info, 0, 1," Folder name (relative to documents root):", default = fid)
+                for a in sel_arts:
                     write_article(a, fid)
                 show_msg(str(len(sel_arts))+ " articles were downloaded and saved into:" + fid)
-                sel_arts = []
 
 def replace_template(template, old_val, new_val):
     ret = template.replace("{newline}","\n")
     ret = ret.replace(old_val,new_val)
     return ret
 
-def write_article(article, folder):
-    if not os.path.exists(folder):
-        os.makedirs(folder)
+def write_article(article, folder=""):
+    ext = '.' + template_menu["preset"]
+    _folder = doc_path + "/" +  template_menu["preset"] + "/" + folder 
+    if not os.path.exists(_folder):
+        os.makedirs(_folder)
     top = replace_template(template_menu["top"],"{url}", article["pdfUrl"])
     bottom = replace_template(template_menu["bottom"],"{url}", article["pdfUrl"])
     paper_title = article['title']
     file_name = paper_title.replace(' ','_').lower()
-    ext = '.' + template_menu["preset"]
-    fpath = folder + '/' + file_name + ext
+    fpath = _folder + '/' + file_name + ext
     f = open(fpath, "w")
     print(top, file=f)
     title = replace_template(template_menu["title"],"{title}",paper_title)
@@ -996,14 +995,14 @@ def show_article(art, show_nod=""):
                 text_win.refresh(0,0, 2,0, rows -2, cols-1)
                 width +=2
             else:
-                cur.beep()
+                mbeep()
         if ch == ord('-'):
             if width > cols // 3:
                 text_win.erase()
                 text_win.refresh(0,0, 2,0, rows -2, cols-1)
                 width -= 2
             else:
-               cur.beep()
+               mbeep()
         if ch == ord('a'):
             if show_nod != '':
                 show_nod = ''
@@ -1012,11 +1011,21 @@ def show_article(art, show_nod=""):
                 tmp = sel_nod(ypos, left, ni)
                 show_nod = tmp if tmp != "NULL" else ""
         if ch == ord('o'):
-            download(art["pdfUrl"], art["title"])
+            if "save_folder" in art:
+                fname = art["save_folder"]
+                _file = Path(fname)
+                if _file.is_file():
+                    openFile(_file)
+            else:
+                fid,_ = minput(win_info, 0, 1," Folder name (relative to documents root, you can leave it blank):", default = "") 
+                if fid != "<ESC>":
+                    download(art["pdfUrl"], art, fid)
         if ch == ord('d'):
-            delete_file(art["title"])
+            _confirm = confirm(win_info, "delete the pdf file from your computer")
+            if _confirm == "y" or _confirm == "a":
+                delete_file(art)
         if ch == cur.KEY_DC:
-            cur.beep()
+            mbeep()
             nods[si] = "remove"
             ch = cur.KEY_DOWN
         if ch == ord('y'):
@@ -1031,7 +1040,7 @@ def show_article(art, show_nod=""):
            update_si = True
 
         if ch == ord('v'):
-            _confirm = confirm(win_info, "restore the removed parts?")
+            _confirm = confirm(win_info, "restore the removed parts")
             if _confirm == "y" or _confirm == "a":
                 visible = [True]*total_sents
             for i,nod in enumerate(nods):
@@ -1074,9 +1083,10 @@ def show_article(art, show_nod=""):
                 sel_arts.append(art)
 
         if ch == ord('w'):
-            folder = "articles-" + date.today().strftime('%Y-%m-%d')
-            write_article(art, folder)
-            show_msg("The article was written in " + folder)
+            fid,_ = minput(win_info, 0, 1," Folder name (relative to documents root, you can leave it blank):", default = "") 
+            if fid != "<ESC>":
+                write_article(art, fid)
+            show_msg("The article was written in " + fid)
         if ch == ord('u'):
             _confirm = confirm(win_info, "reset the article")
             if _confirm == "y" or _confirm == "a":
@@ -1154,15 +1164,15 @@ def show_article(art, show_nod=""):
                         si += 1
                     if si == total_sents:
                         si = tmp_si
-                        cur.beep()
+                        mbeep()
                     
                 if ch == cur.KEY_DOWN and nod_set:
                     bmark = si
                     while bmark >=0 and nods[bmark - 1] == "next":
                         bmark -= 1
             else:
-                cur.beep()
-                show_info("Please use left or right arrow keys to nod the sentnce.")
+                mbeep()
+                show_info("Please use the <Left> or <Right> arrow keys to nod the sentence.")
                 if si > total_sents - 1:
                     si = total_sents - 1
         if ch == cur.KEY_UP:
@@ -1175,7 +1185,7 @@ def show_article(art, show_nod=""):
                     while bmark >=0 and nods[bmark - 1] == "next":
                         bmark -= 1
             else:
-                cur.beep()
+                mbeep()
                 si = 0
 
         update_si = False
@@ -1185,7 +1195,7 @@ def show_article(art, show_nod=""):
                 fc = art["sections"][sc]["frags_offset"] + 1 
                 update_si = True
             else:
-                cur.beep()
+                mbeep()
                 sc = 0
         if ch == ord('k'):
             if sc < total_sects - 1:
@@ -1193,7 +1203,7 @@ def show_article(art, show_nod=""):
                 fc = art["sections"][sc]["frags_offset"] + 1
                 update_si = True
             else:
-                cur.beep()
+                mbeep()
                 sc = total_sects -1
                 fc = art["sections"][sc]["frags_offset"] + 1
                 update_si = True
@@ -1205,7 +1215,7 @@ def show_article(art, show_nod=""):
                     fc += 1
                 update_si = True
             else:
-                cur.beep()
+                mbeep()
                 fc = total_frags -1
         if ch == ord('l'):
             if fc > 0 :
@@ -1215,20 +1225,20 @@ def show_article(art, show_nod=""):
                     fc -= 1
                 update_si = True
             else:
-                cur.beep()
+                mbeep()
                 fc = 0
 
         if ch == ord('.'):
             if start_row < cury:
                 start_row += scroll
             else:
-                cur.beep()
+                mbeep()
 
         if ch == ord(','):
             if start_row > 0:
                 start_row -= scroll
             else:
-                cur.beep()
+                mbeep()
 
         if ch == cur.KEY_PPAGE:
             si = max(si - 10, 0)
@@ -1415,15 +1425,19 @@ def refresh_menu(menu, menu_win, sel, options, shortkeys, subwins):
            color = CUR_ITEM_COLOR
        else:
            color = ITEM_COLOR
+       fw = cur.A_BOLD
+       if str(v) == "button_light":
+           fw = None
+
        if k.startswith("sep"):
            if v:
              print_there(row, col,  str(v) + colon, menu_win, color)
        else:
-           print_there(row, col, "{:<{}}".format(key, _m), menu_win, color, attr = cur.A_BOLD)
-           if v != "button" and not k in subwins:
+           print_there(row, col, "{:<{}}".format(key, _m), menu_win, color, attr = fw)
+           if not str(v).startswith("button") and not k in subwins:
              print_there(row, gap, colon, menu_win, color, attr = cur.A_BOLD)
 
-       if v != "button" and not k in subwins:
+       if not str(v).startswith("button") and not k in subwins:
            if "color" in k:
                print_there(row, col + _m + 2, "{:^5}".format(str(v)), menu_win, color_map[k]) 
            elif not k.startswith("sep"):
@@ -1482,15 +1496,17 @@ def show_info(msg, color=INFO_COLOR, bottom = True):
                 if start_row > 0:
                     start_row -= 10
                 else:
-                    cur.beep()
+                    mbeep()
             elif ch == cur.KEY_DOWN:
                 if start_row < nlines - rows + 5:
                     start_row += 10
                 else:
-                    cur.beep()
+                    mbeep()
+            elif ch != ord('q'):
+                mbeep()
 
 def show_msg(msg, color=MSG_COLOR):
-   cur.beep()
+   mbeep()
    show_info(msg + " press any key", color)
    std.getch()
 
@@ -1576,7 +1592,7 @@ def select_box(win, in_opts, ni, in_row = False):
         elif ch == cur.KEY_LEFT:
             ni -= 1
         elif ch != 27 and ch != ord('q'):
-            cur.beep()
+            mbeep()
             show_info("Use left arrow key to select the item, the right key or q to cancel!")
 
     return -1
@@ -1663,7 +1679,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
             sub_menu_win.erase()
             if mode == 'm':
                 refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
-        if sel not in options and menu[sel] != "button" and not sel.startswith("sep"): 
+        if sel not in options and not str(menu[sel]).startswith("button") and not sel.startswith("sep"): 
              # menu[sel]=""
             cur_val = menu[sel]
             #refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
@@ -1702,7 +1718,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
                 subwins[sel]["y"],
                 subwins[sel]["x"])
             sub_menu_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
-        if mode == 's' and menu[sel] != "button":
+        if mode == 's' and not str(menu[sel]).startswith("button"):
             if sel in options:
               si = min(si, len(options[sel]) - 1)
               si = max(si, 0)
@@ -1717,7 +1733,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
             ch = cur.KEY_UP
             
         if ch == cur.KEY_RESIZE:
-            cur.beep()
+            mbeep()
             refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
 
         if ch == cur.KEY_DOWN:
@@ -1743,7 +1759,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
             elif sel in options:
                 si -= 10
         elif  ch == cur.KEY_ENTER or ch == 10 or ch == 13 or (chr(ch) in shortkeys and ch == prev_ch):
-            is_button = menu[sel] == "button"
+            is_button = str(menu[sel]).startswith("button")
             if is_button: 
               if sel == "save as" or sel == "reset" or sel == "delete" or sel == "save and quit":
                   cmd = sel
@@ -1779,7 +1795,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
                 si = 0
                 old_val = ""
         elif ch == cur.KEY_RIGHT:
-            if menu[sel] != "button":
+            if not str(menu[sel]).startswith("button"):
                 old_val = menu[sel]
                 if sel in options and menu[sel] in options[sel]:
                     si = options[sel].index(menu[sel]) 
@@ -1853,7 +1869,7 @@ def show_menu(menu, options, shortkeys={}, title = "", mi = 0, subwins={}, info 
             mi = list(menu.keys()).index(shortkeys[chr(ch)])
             sel,mi = get_sel(menu, mi)
             #refresh_menu(menu, menu_win, sel, options, shortkeys, subwins)
-            if menu[sel] == "button":
+            if str(menu[sel]).startswith("button"):
                 return sel, menu, mi
             old_val = menu[sel]
             mode = 's'
@@ -1898,7 +1914,7 @@ def start(stdscr):
             menu["last results"]="button"
         else:
             menu["help"] = "button"
-        menu["sep1"] ="Search over 350,000 AI-related papers"
+        menu["sep1"] ="Search over AI-related papers"
         menu["keywords"]=""
         menu["Go!"]="button"
         menu["advanced search"]="button"
@@ -2023,19 +2039,9 @@ def start(stdscr):
              clear_screen(std)
              show_article(last_visited[si])
         elif ch == 'text files':
-            save_folder = os.path.expanduser('~/Documents/Nodreader')
-            text_files =  [str(Path(f)) for f in Path(save_folder).glob('*.txt') if f.is_file()]
-            articles = []
-            for text in text_files:
-                name = Path(text).name
-                with open(text, "r") as f:
-                    data = f.read()
-                title, i = get_title(data, name)
-                if i > 0:
-                    data = data[i:]
-                art = {"id":text, "pdfUrl":name, "title":title, "sections":get_sects(data)}
-                articles.append(art)
-            ret = list_articles(articles, "text files")
+            save_folder = doc_path + '/txt'
+            Path(save_folder).mkdir(parents=True, exist_ok=True)
+            show_texts(save_folder)
         elif ch.startswith("del@recent articles"):
             parts = ch.split("@")
             last_visited.pop(int(parts[2]))
@@ -2050,6 +2056,43 @@ def start(stdscr):
                      ret = list_articles(articles, "sel articles")
                  else:
                      show_err("Unable to load the file....")
+
+def show_texts(save_folder):
+    subfolders = [ f.name for f in os.scandir(save_folder) if f.is_dir() ]
+    menu = {}
+    for sf in subfolders:
+        menu["[>] "+sf]="button"
+    text_files =  [str(Path(f)) for f in Path(save_folder).glob('*.txt') if f.is_file()]
+    if not text_files and not subfolders:
+        menu[".."] = "button"
+    count = 1
+    for text in text_files:
+        name = Path(text).name
+        if len(name) > 60:
+            name = name[:60] + "..."
+        name = "[" + str(count) + "] " + name
+        menu[name] = "button_light"
+        count += 1
+    options = {}
+    mi = 0
+    ch = ''
+    while ch != 'q':
+        ch, menu, mi = show_menu(menu, options, mi = mi)
+        if ch.startswith("[>"):
+            sfolder = save_folder + "/" + ch[4:]
+            show_texts(sfolder)
+        elif ch == "..":
+            ch = 'q'
+        elif ch != "q":
+            index = mi - len(subfolders)
+            text = text_files[index]
+            with open(text, "r") as f:
+                data = f.read()
+            title, i = get_title(data, name)
+            if i > 0:
+                data = data[i:]
+            art = {"id":text, "pdfUrl":name, "title":title, "sections":get_sects(data)}
+            show_article(art) 
 
 def saved_items():
     menu = {}
@@ -2072,18 +2115,23 @@ def saved_items():
             list_tags()
 
 def settings():
-    global theme_menu
+    global theme_menu, doc_path
     choice = '' 
     menu = load_obj("options", "")
     font_size = 24
+    path = '~/Documents/Nodreader'
+    path.replace('/', os.sep)
+    doc_path = os.path.expanduser(path)
     if menu is None:
-        menu = {"theme":"button","saved folder":""}
-        path = '~/Documents/Nodreader'
-        path.replace('/', os.sep)
-        menu["saved folder"] = os.path.expanduser(path)
+        menu = {"theme":"button","documents folder":""}
+        menu["documents folder"] = doc_path
     else:
-        font_size = menu["font size"]
+        if os.name == 'nt':
+            font_size = menu["font size"]
+        doc_path = menu["documents folder"]
 
+    if doc_path.endswith("/"):
+        doc_path = doc_path[:-1]
     options = {}
     if os.name == 'nt':
         menu["font size"]=font_size
@@ -2099,6 +2147,11 @@ def settings():
         if choice == "font size":
             resize_font_on_windows(int(menu["font size"])) # std)
             show_msg("The font size will changes in the next run of the application")
+
+    doc_path = menu["documents folder"]
+    Path(doc_path).mkdir(parents=True, exist_ok=True)
+    save_obj(menu, "options", "")
+    
 
 def list_notes(notes = "nods"):
     subwins = {
@@ -2478,7 +2531,11 @@ def show_last_results():
          show_msg("Last results is missing....")
 
 def main():
+    global doc_path
     nr_options = load_obj("options", "")
+    if nr_options != None:
+        doc_path = nr_options["documents folder"]
+        Path(doc_path).mkdir(parents=True, exist_ok=True)
     if os.name == "nt":
         maximize_console(29)       
         orig_size = resize_font_on_windows(20, True)
