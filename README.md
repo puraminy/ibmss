@@ -1,13 +1,18 @@
-# What is NodReader
+## What is NodReader
 
 Using Nodreader you can search and study scientific papers or any other article.
 You can also manage your articles and the pdf files associated with them.
 However, the main goal of Nodreader is to provide a new experience of study. The program is text-based and relies mainly on the keyboard. The program offers you the summaries of the articles when you want to concentrate on the purpose and main ideas within the article. You can also view the figures of the article in a browser. If you want, you can download and open the original pdf file for each article.
 
-# How to install
+## Installation
 
 ```
 pip install nodreader
+```
+### Installation on Windows
+For Windows you need to instll `windows-curses` package too, so use the following command:
+```
+pip install windows-curses nodreader
 ```
 
 ## Nods
@@ -16,6 +21,7 @@ When you open an article and start reading, Nodreader automatically highlights t
 
 Example of nodes are:
 
+```
  - okay, when you have almost understood the purpose of a sentence or a fragment of the text
  - interesting!, when you found it has a useful point.
  - important!, when you think it contains an important point which can be used later.
@@ -27,8 +33,8 @@ Example of nodes are:
  - why, when you understand the sentence but don't get the reasoning behind it.
  - explain, when you get the sentence idea but you don't know how it's implemented.
  - needs research, when there are some points or jargons in the sentence that needs research.
-
  - ...
+```
  
 
 And some other nods.
@@ -41,9 +47,9 @@ Since 'okay' is supposed a common nod, you can press the <Right> arrow key to en
 
 Sometimes you want to add a comment to the selected fragment. To do this, press : (colon). Then you can write the comment in a bar shown below the article and hit Enter at the end.
 
-## Hotkeys when reading an article
+## other features
 
-Nodreader has many other features, which you can discover when you work with it. Some other hotkeys are listed below. They are accessible when you open an article. You can hit h to see the following list. 
+Nodreader has many other features, which you can discover when you work with it. Some hotkeys are listed below. They are accessible when you open an article. You can hit h to see the following list. 
 
 ```
  Down)          expand the selection to the next sentence
@@ -69,8 +75,7 @@ Nodreader has many other features, which you can discover when you work with it.
  q)             close
 ```
 
-
-## working with menus and input boxes
+###  working with menus and input boxes
 
 Use <Down> or <Up> keys to navigate between the items of a menu. Optionally, you can press the hotkey associated with each item which is shown at the beginning of that option. Press <Enter> to open or run a menu item. Some items are input boxes to get an input from the user. To escape an input box, you can either use <Esc> or simply <Down> key to go to the next item. Another useful key in the input box is left angle bracket (<) which clears the entire input box.
 
