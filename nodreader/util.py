@@ -225,6 +225,7 @@ def confirm(win, msg, acc = ['y','n']):
 def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
     on_enter = False
     rows, cols = stdscr.getmaxyx()
+    caps = cols - col - len(prompt_string) - 2
     if not accept_on:
         on_enter = True
         accept_on = [10, cur.KEY_ENTER]
@@ -236,7 +237,14 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
     stdscr.addstr(row, col, prompt_string)
     stdscr.clrtoeol()
     stdscr.refresh()
-    inp = str(default)
+    out = default.split('\n')
+    out = list(filter(None, out))
+    line = 0
+    if out:
+        inp = str(out[0])
+    else:
+        inp = default
+        out.append(inp)
     pos = len(inp)
     ch = 0
     start = col + len(prompt_string)
@@ -255,13 +263,24 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
                 inp = inp[:pos-1] + inp[pos:]
                 pos -= 1
             else:
-                cur.beep()
+                mbeep()
         elif ch == cur.KEY_DC:
             if pos < len(inp):
                 inp = inp[:pos] + inp[pos+1:]
             else:
-                cur.beep()
+                mbeep()
         elif chr(ch)=='<':
+            if line == 0:
+                inp = ""
+            else:
+                del out[line]
+                if line > len(out) - 1:
+                    line = len(out) - 1
+                inp = out[line]
+        elif chr(ch) == ">":
+            out[line] = inp
+            line = line + 1
+            out.insert(line, "")
             inp = ""
         elif ch == cur.KEY_HOME:
             pos = 0
@@ -271,35 +290,51 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
             if pos > 0:
                 pos -= 1 
             else:
-                cur.beep()
+                mbeep()
         elif ch == cur.KEY_RIGHT:
             pos += 1
-        elif ch == cur.KEY_UP or ch == cur.KEY_DOWN:
-            hide_cursor()
-            cur.noecho()
-            return inp,ch
+        elif ch == cur.KEY_UP: 
+            if line == 0:
+                break
+            elif line == 0:
+                mbeep()
+            else:
+                out[line] =inp
+                line -= 1
+                inp = out[line]
+        elif ch == cur.KEY_DOWN:
+            if line == len(out) - 1:
+                break
+            else:
+                out[line] = inp
+                line += 1
+                inp = out[line]
         elif ch == 27:
             hide_cursor()
             cur.noecho()
             return "<ESC>",ch
         else:
             letter =chr(ch)
-            if len(inp) >= cols - len(prompt_string):
-                cur.beep()
+            if len(inp) >= caps:
+                mbeep()
             elif on_enter:
                 if letter.isalnum() or letter in ["'",'#','%','$','@','!','^','&','(',')', '*',' ',',','/','-','_',':','.','?','+']:
                     inp = inp[:pos] + letter + inp[pos:]
                     pos += 1
                 else:
-                    cur.beep()
+                    mbeep()
             else:
                 if ch in accept_on:
                     inp = inp[:pos] + letter + inp[pos:]
                 else:
-                    cur.beep()
+                    mbeep()
     cur.noecho()
     hide_cursor()
-    return inp,ch  
+    if len(out) == 0:
+        return inp,ch  
+    else:
+        out[line] = inp
+        return "\n".join(out), ch
 
 def mbeep(repeat=1):
     if os.name == "nt":
