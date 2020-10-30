@@ -1,4 +1,5 @@
 import requests
+import io
 import subprocess, os, platform
 import webbrowser
 from datetime import date
@@ -12,6 +13,7 @@ import shlex
 import re
 import textwrap
 import json
+import urllib.request
 try:
     from nodreader.util import *
 except:
@@ -102,20 +104,26 @@ nod_color = {
         "yes":(147,148),
         "OK":(36,36),
         "agree":(22,22),
-        "okay":(29,32),
-        "okay, okay!":(22,25),
+        "archive":(145,145),
+        "okay":(29,36),
+        "okay, okay!":(25,25),
         "okay?":(59,62),
+        "not reviewed":(59,62),
+        "goal":(22,22),
         "skipped":(244,245),
-        "interesting!":(28,32),
+        "interesting!":(28,77),
         "important!":(97,98),
-        "got an idea!":(114,115),
+        "has an idea!":(114,115),
         "didn't get!":(89,90),
         "so?":(138,138),
         "okay, so?":(32,32),
-        "explain more":(93,94),
+        "explain more":(131,94),
         "why?":(58,59),
-        "review later":(179,181),
-        "research":(179,179),
+        "needs review":(63, 177),
+        "review later":(63, 177),
+        "to read later":(63, 177),
+        "needs research":(94,179),
+        "definition":(32,250),
         "got it!":(68,69),
         }
 
@@ -194,6 +202,7 @@ def openFile(filepath):
             os.startfile(filepath)
         else:                                   # linux variants
             subprocess.call(('xdg-open', filepath))
+        show_info("File was opened externally")
     else:
         show_err(str(filepath) + " doesn't exist, you can download it by hitting d key")
 
@@ -235,40 +244,43 @@ def download(url, art, folder):
     _file = Path(fname)
     if _file.is_file(): 
         openFile(_file)
-        show_info("")
+        art["save_folder"] = str(_file)
     else:
-        #f,_  = minput(win_info, 0, 1, "Save articles as:", default = file_name) 
-        #if f != '<ESC>':
-        #    file_name = f
-        #    fname = folder + "/" + file_name
-        #    _file = Path(fname)
         show_info("Starting download ... please wait")
         sleep(0.1)
-        response = requests.get(url, stream=True)
-        total_size_in_bytes= int(response.headers.get('content-length', 0))
-        block_size = 1024*10 #10 Kibibyte
-        steps = total_size_in_bytes // block_size
-        step = 0
-        prog = 0
-        with open(fname, 'wb') as file:
-            for data in response.iter_content(block_size):
-                prog = int(round(step / steps, 2)*100)
-                show_info("Downloading ... " + str(prog) + "%")
-                sleep(0.1)
-                step += 1
-                file.write(data)
-        #show_info("Saved at" + fname)
-        if total_size_in_bytes != 0 and prog < 100:
-            show_err("ERROR, something went wrong")
-        else:
-            art["save_folder"] = fname
-            openFile(_file)
+        with urllib.request.urlopen(url) as Response:
+            Length = Response.getheader('content-length')
+            BlockSize = 1000000  # default value
 
-    #text = pdfparser(file_name)
-    #text = text[:10000]
-    #text = text.replace("\n\n","<stop>")
-    #art = {"id":file_name, "pdfUrl":file_name, "title":file_name, "sections":[{"title":"all", "fragments":get_frags(text)}]}
-    #show_article(art)
+            if not Length:
+                show_err("ERROR, zero file size,  something went wrong")
+                return
+            else:
+                Length = int(Length)
+                BlockSize = max(4096, Length // 20)
+
+            show_info("UrlLib len, blocksize: " + str(Length) + " " + str(BlockSize))
+
+            BufferAll = io.BytesIO()
+            Size = 0
+            try:
+                while True:
+                    BufferNow = Response.read(BlockSize)
+                    if not BufferNow:
+                        break
+                    BufferAll.write(BufferNow)
+                    Size += len(BufferNow)
+                    if Length:
+                        Percent = int((Size / Length)*100)
+                        show_info(f"download: {Percent}% {url}")
+
+                _file.write_bytes(BufferAll.getvalue())
+                show_info("File was written to " + str(_file))
+                art["save_folder"] = str(_file)
+                openFile(_file)
+
+            except Exception as e:
+                show_err("ERROR:"+ str(e))
 
 
 def save_obj(obj, name, directory):
@@ -482,7 +494,7 @@ def list_articles(in_articles, fid, show_nod = False, group="", filter_nod =""):
             art_nod = ""
             if "nods" in a and a["nods"][0] != "":
                 nod = a["nods"][0]
-                color = nod_color[nod][1]  % cur.COLORS
+                color = nod_color[nod][1]  % cur.COLORS if nod in nod_color else TEXT_COLOR
                 art_nod = " [" + nod + "]"
 
             if a in sel_arts:
@@ -576,7 +588,7 @@ def list_articles(in_articles, fid, show_nod = False, group="", filter_nod =""):
             show_info(('\n'
                        ' s)          select/deselect an article\n'
                        ' a)          select all articles\n'
-                       " n)          filter the articles by the title's nod \n"
+                       " Left)          filter the articles by the title's nod \n"
                        ' t)          tag the selected items\n'
                        ' d)          delete the selected items from list\n'
                        ' w)          write the selected items into files\n'
@@ -593,11 +605,11 @@ def list_articles(in_articles, fid, show_nod = False, group="", filter_nod =""):
                 sel_arts.append(articles[k])
             else:
                 sel_arts.remove(articles[k])
-        if ch == ord('n'):
+        if ch == ord('n') or ch == cur.KEY_LEFT:
             if filter_nod != '':
                 ch = ord('q')
             else:
-                tmp = sel_nod(5, 10, ni)
+                tmp = sel_nod(5, 10, ni, 0)
                 _nod = tmp if tmp != "NULL" else ""
                 if _nod != "":
                     list_articles(articles, fid, show_nod, group, _nod)
@@ -701,17 +713,20 @@ def write_article(article, folder=""):
     f.close()
     show_info("Artice was writen to " + fpath + '...')
 
-def sel_nod(ypos, left, ni):
-    nod_win = cur.newwin(8, 60, ypos + 2, left)
+def sel_nod(ypos, left, ni, si):
+    nod_win = cur.newwin(12, 60, ypos + 2, left)
     nod_win.bkgd(' ', cur.color_pair(INFO_COLOR)) # | cur.A_REVERSE)
-    opts = None #load_obj("nod_opts","")
-    if opts is None:
-        opts = ["interesting!", "important!", "definition", "okay, okay!", "got it!", "got an idea!", "okay, so?", "explain more", "why?", "didn't get!", "review later", "research", "custom"]
+    opts = [] #load_obj("nod_opts","")
+    if si == 0:
+        opts.append(["interesting!", "important!", "needs review", "needs research", "got it!", "didn't get!", "archive", "not reviewed", "to read later", "skipped"])
+    elif not opts:
+        opts.append(["interesting!", "important!", "has an idea!",  "okay, so?", "explain more", "why?", "didn't get!", "needs review", "needs research", ""])
+        opts.append(["definition", "goal", "support", "example"])
         save_obj(opts, "nod_opts", "")
 
-    ni = select_box(nod_win, opts, ni, in_row = True, colors = nod_color)
+    ni, stack_index = select_box(nod_win, opts, ni, stack_index = 0, in_row = True)
     if ni >= 0:
-        _nod = opts[ni]
+        _nod = opts[stack_index][ni]
         if _nod == "custom":
             custom_nod,_ = minput(win_info, 0, 1, "Enter a note or a nod (<Esc> to cancel):") 
             _nod = custom_nod if custom_nod != "<ESC>" else ""
@@ -783,7 +798,7 @@ def show_article(art, show_nod=""):
        nods = art["nods"]
        has_nods = True
     else:
-        nods.append("okay?")
+        nods.append("not reviewed")
     comments = []   
     if "comments" in art:
         comments = art["comments"]
@@ -891,7 +906,7 @@ def show_article(art, show_nod=""):
         print_nod(text_win, nods, 0, 0, 0, width)
         mprint(pdfurl,  text_win, TITLE_COLOR, attr = cur.A_BOLD) 
         if comments[0] != "":
-            com = textwrap.wrap(comments[fsn], width=width-5, replace_whitespace=False)
+            com = textwrap.wrap(comments[0], width=width-5, replace_whitespace=False)
             com = "\n".join(com)
             mprint(com, text_win, COMMENT_COLOR)
         pos[0],_ = text_win.getyx()
@@ -1062,20 +1077,23 @@ def show_article(art, show_nod=""):
                 width -= 2
             else:
                mbeep()
-        if ch == ord('a'):
+        if ch == ord('n'):
             if show_nod != '':
                 show_nod = ''
                 visible = [True]*total_sents
             else:
                 ypos = pos[bmark]-start_row
-                tmp = sel_nod(ypos, left, ni)
+                tmp = sel_nod(ypos, left, ni, 0)
                 show_nod = tmp if tmp != "NULL" else ""
         if ch == ord('o'):
-            if "save_folder" in art:
+            if "save_folder" in art and art["save_folder"] != "":
                 fname = art["save_folder"]
                 _file = Path(fname)
                 if _file.is_file():
                     openFile(_file)
+                else:
+                    show_msg(str(_file) + " was not found")
+                    art["save_folder"] = ""
             else:
                 fid,_ = minput(win_info, 0, 1," Folder name (relative to documents root, you can leave it blank):", default = "") 
                 if fid != "<ESC>":
@@ -1084,6 +1102,7 @@ def show_article(art, show_nod=""):
             _confirm = confirm(win_info, "delete the pdf file from your computer")
             if _confirm == "y" or _confirm == "a":
                 delete_file(art)
+                art["save_folder"] = ""
         if ch == cur.KEY_DC:
             mbeep()
             nods[si] = "remove"
@@ -1106,6 +1125,7 @@ def show_article(art, show_nod=""):
             for i,nod in enumerate(nods):
                 if nod == "remove":
                     nods[i] = ""
+            art_changed = True
         if ch == ord('z'):
             show_reading_time = not show_reading_time
 
@@ -1124,7 +1144,7 @@ def show_article(art, show_nod=""):
                        '  u)             reset comments and nods\n'
                        '  DEL)           remove selected sentence\n'
                        '  v)             restore removed sentences\n'
-                       '  a)             filter sentences by a nod\n'
+                       '  n)             filter sentences by a nod\n'
                        '  +/-)           increase/decrease the width of text\n'
                        '  :)             add a comment \n'
                        '  k/j)           previous/next section\n'
@@ -1152,6 +1172,7 @@ def show_article(art, show_nod=""):
                 visible = [True]*total_sents
                 passable = [False]*total_sents
                 si = 2
+                art_changed = True
                 update_si = True
         if ch == ord('e'):
             if expand < 3:
@@ -1185,7 +1206,7 @@ def show_article(art, show_nod=""):
                 nod_set = True
             elif ch == cur.KEY_LEFT:
                 ypos = pos[bmark]-start_row
-                tmp_nod = sel_nod(ypos, left, ni)
+                tmp_nod = sel_nod(ypos, left, ni, si)
                 if tmp_nod != 'NULL':
                     _nod = tmp_nod
                     nod_set = True
@@ -1350,6 +1371,9 @@ def show_article(art, show_nod=""):
             show_info(main_info)
             _comment = _comment if _comment != "<ESC>" else comments[si]
             art_changed = True
+            if nods[si] == "" or nods[si] == "next":
+                nods[si] = "okay"
+                bmark = si
             comments[si] = _comment
 
         if ch == ord('t'):
@@ -1632,11 +1656,11 @@ def load_preset(new_preset, options, folder=""):
     save_obj(conf, "conf", "")
     return menu, options
 
-def select_box(win, in_opts, ni, in_row = False, colors = {}):
+def select_box(win, in_opts, ni, in_row = False, stack_index = 0):
     ch = 0
     win.border()
     opts = []
-    for i,k in enumerate(in_opts):
+    for i,k in enumerate(in_opts[stack_index]):
         opts.append(str(i) + ") " + k)
     row_cap = 3 if in_row else 1
     while ch != 27 and ch != ord('q'):
@@ -1647,18 +1671,16 @@ def select_box(win, in_opts, ni, in_row = False, colors = {}):
             show_submenu(win, opts, ni, color = INFO_COLOR)
         else:
             for i,k in enumerate(opts):
-                row = i // row_cap
-                col = (i % row_cap)*17
+                row = (i // row_cap) 
+                col = (i % row_cap)*20
                 if i == ni:
                     print_there(row, col, k, win, CUR_ITEM_COLOR)
                 else:
-                   #_color = INFO_COLOR if not k in colors else colors[k]
-                   #cur.init_pair(TEMP_COLOR, back_color, _color % cur.COLORS)
                    print_there(row, col, k, win, INFO_COLOR)
             win.refresh()
         ch = get_key(std)
         if ch == cur.KEY_ENTER or ch == 10 or ch == 13:
-           return ni
+           return ni, stack_index
         if chr(ch).isdigit():
             ni = int(chr(ch))
         elif ch == ord('d'):
@@ -1667,17 +1689,26 @@ def select_box(win, in_opts, ni, in_row = False, colors = {}):
             ni += row_cap
         elif ch == cur.KEY_UP:
             if ni < row_cap:
-                return -1
+                return -1, stack_index
             ni -= row_cap
         elif ch == cur.KEY_RIGHT:
             ni += 1
         elif ch == cur.KEY_LEFT:
-            ni -= 1
+            if ni == 0: 
+               if stack_index < len(in_opts) - 1:
+                   stack_index += 1
+                   nn, stack_index = select_box(win, in_opts, ni, in_row, stack_index)
+                   if nn >= 0:
+                       return nn, stack_index
+               else:
+                   return -1, stack_index
+            else:
+               ni -= 1
         elif ch != 27 and ch != ord('q'):
             mbeep()
             show_info("Use left arrow key to select the item, the right key or q to cancel!")
 
-    return -1
+    return -1, stack_index
     
 
 def show_submenu(sub_menu_win, opts, si, is_color = False, color = ITEM_COLOR):
@@ -1993,10 +2024,7 @@ def start(stdscr):
     if menu is None or (newspaper_imported and not "webpage" in menu):
         isFirst = True
         menu = {}
-        if is_obj("last_results",""):
-            menu["last results"]="button"
-        else:
-            menu["help"] = "button"
+        menu["reviewed articles"]="button"
         menu["sep1"] ="Search AI-related papers"
         menu["keywords"]=""
         menu["Go!"]="button"
@@ -2063,7 +2091,7 @@ def start(stdscr):
     std.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
     clear_screen(std)
     ch = ''
-    shortkeys = {"l":"last results", "n":"nods", "r":"recent articles","t":"tagged articles","o":"options", "p":"webpage", "a":"advanced search","s":"saved items", "w":"website articles",'t':"text files"}
+    shortkeys = {"l":"reviewed articles", "n":"nods", "r":"recent articles","t":"tagged articles","o":"options", "p":"webpage", "a":"advanced search","s":"saved items", "w":"website articles",'t':"text files"}
     mi = 0
     while ch != 'q':
         info = "h) help         q) quit"
@@ -2072,8 +2100,19 @@ def start(stdscr):
         save_obj(menu, "main_menu", "")
         if ch == "advanced search":
             search()
-        elif ch == 'l' or ch == "last results":
+        elif ch == "last results":
             show_last_results()
+        elif ch == 'l' or ch == "reviewed articles":
+            saved_articles = load_obj("saved_articles","articles", [])
+            rev_articles = []
+            for art in saved_articles:
+                if "nods" in art and art["nods"][0] != "":
+                    rev_articles.append(art)
+            if len(rev_articles) == 0:
+                show_msg("There is no article reviewed yet, to review an article enter a nod for its title.")
+            else:
+                list_articles(rev_articles, "Reviewed Articles")
+
         elif ch == 's' or ch == "saved items":
             saved_items()
         elif ch == "Go!":
@@ -2179,11 +2218,11 @@ def show_texts(save_folder):
 
 def saved_items():
     menu = {}
-    menu["reviewed articles"]="button"
+    #menu["reviewed articles"]="button"
     menu["tagged articles"]="button"
     menu["nods"]="button"
     menu["comments"]="button"
-    shortkeys = {"r":"reviewed articles", "c":"comments", "n":"nods", "t":"tagged articles", 'x':"text files"}
+    shortkeys = {"s":"saved articles", "c":"comments", "n":"nods", "t":"tagged articles", 'x':"text files"}
     options = {}
     mi = 0
     ch = ''
@@ -2197,10 +2236,9 @@ def saved_items():
              list_comments()
         elif ch == 't' or ch == "tagged articles":
             list_tags()
-        elif ch == 'r' or ch == "reviewed articles":
+        elif ch == 's' or ch == "saved articles":
             saved_articles = load_obj("saved_articles","articles")
             list_articles(saved_articles, "Saved Articles")
-
 def settings():
     global theme_menu, doc_path
     choice = '' 
