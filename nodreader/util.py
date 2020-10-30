@@ -270,7 +270,7 @@ def minput(stdscr, row, col, prompt_string, accept_on = [], default=""):
             else:
                 mbeep()
         elif chr(ch)=='<':
-            if line == 0:
+            if line == 0 and len(out) == 1:
                 inp = ""
             else:
                 del out[line]
