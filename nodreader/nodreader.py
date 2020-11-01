@@ -112,6 +112,7 @@ nod_color = {
         "goal":(22,22),
         "skipped":(244,245),
         "interesting!":(28,77),
+        "contribution":(28,77),
         "important!":(97,98),
         "has an idea!":(114,115),
         "didn't get!":(89,90),
@@ -123,6 +124,7 @@ nod_color = {
         "review later":(63, 177),
         "to read later":(63, 177),
         "needs research":(94,179),
+        "problem":(94,179),
         "definition":(32,250),
         "got it!":(68,69),
         }
@@ -721,7 +723,7 @@ def sel_nod(ypos, left, ni, si):
         opts.append(["interesting!", "important!", "needs review", "needs research", "got it!", "didn't get!", "archive", "not reviewed", "to read later", "skipped"])
     elif not opts:
         opts.append(["interesting!", "important!", "has an idea!",  "okay, so?", "explain more", "why?", "didn't get!", "needs review", "needs research", ""])
-        opts.append(["definition", "goal", "support", "example"])
+        opts.append(["problem", "definition", "goal", "contribution", "example"])
         save_obj(opts, "nod_opts", "")
 
     ni, stack_index = select_box(nod_win, opts, ni, stack_index = 0, in_row = True)
@@ -1421,16 +1423,16 @@ def show_article(art, show_nod=""):
             fig_win = cur.newwin(8, width, ypos + 2, left)
             fig_win.bkgd(' ', cur.color_pair(TEXT_COLOR)) # | cur.A_REVERSE)
             fig_win.border()
-            opts = []
+            opts = [[]]
             fig_num =1
             for fig in figures:
                 fig_num +=1
                 caption = fig["caption"]
                 if not caption.startswith("Figure"):
                    caption = "Figure " + str(fig_num) + ":" + caption
-                opts.append(caption)
+                opts[0].append(caption)
 
-            fi = select_box(fig_win, opts, fi, in_row = False)
+            fi,_ = select_box(fig_win, opts, fi, in_row = False)
             if fi >= 0:
                 fname = app_path + "/nodreader_temp.html" 
                 if not figures_created:
@@ -1476,7 +1478,6 @@ def create_figures_file(figures, fname):
                 }
                 .imgbox {
                     display: grid;
-                    height:75%;
                     margin:2% 10% 2% 10%;
                 }
                 .center-fit {
@@ -1683,6 +1684,7 @@ def select_box(win, in_opts, ni, in_row = False, stack_index = 0):
            return ni, stack_index
         if chr(ch).isdigit():
             ni = int(chr(ch))
+            return ni, stack_index
         elif ch == ord('d'):
             opts.pop(ni)
         elif ch == cur.KEY_DOWN:
