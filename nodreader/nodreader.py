@@ -118,6 +118,7 @@ nod_color = {
         "didn't get!":(89,90),
         "so?":(138,138),
         "okay, so?":(32,32),
+        "almost got the idea?":(32,32),
         "explain more":(131,94),
         "why?":(58,59),
         "needs review":(63, 177),
@@ -127,6 +128,7 @@ nod_color = {
         "problem":(94,179),
         "definition":(32,250),
         "got it!":(68,69),
+        "got the idea!":(68,69),
         }
 
 cW = 7
@@ -715,17 +717,21 @@ def write_article(article, folder=""):
     f.close()
     show_info("Artice was writen to " + fpath + '...')
 
-def sel_nod(ypos, left, ni, si):
-    nod_win = cur.newwin(12, 60, ypos + 2, left)
-    nod_win.bkgd(' ', cur.color_pair(INFO_COLOR)) # | cur.A_REVERSE)
+def sel_nod(ypos, left, ni, si, no_win = False):
     opts = [] #load_obj("nod_opts","")
     if si == 0:
-        opts.append(["interesting!", "important!", "needs review", "needs research", "got it!", "didn't get!", "archive", "not reviewed", "to read later", "skipped"])
+        opts.append(["interesting!", "important!", "needs review", "needs research", "almost got it!", "got the idea!", "didn't get!", "archive", "not reviewed", "to read later", "skipped"])
     elif not opts:
         opts.append(["interesting!", "important!", "has an idea!",  "okay, so?", "explain more", "why?", "didn't get!", "needs review", "needs research", ""])
         opts.append(["problem", "definition", "goal", "contribution", "example"])
         save_obj(opts, "nod_opts", "")
 
+    if no_win:
+       _nod = opts[0][ni]
+       return _nod
+
+    nod_win = cur.newwin(12, 60, ypos + 2, left)
+    nod_win.bkgd(' ', cur.color_pair(INFO_COLOR)) # | cur.A_REVERSE)
     ni, stack_index = select_box(nod_win, opts, ni, stack_index = 0, in_row = True)
     if ni >= 0:
         _nod = opts[stack_index][ni]
@@ -1192,7 +1198,7 @@ def show_article(art, show_nod=""):
             else:
                 sel_sects[art_id] = [cur_sect]
 
-        if ch == cur.KEY_LEFT or ch == cur.KEY_RIGHT or ch == cur.KEY_DOWN:
+        if ch == cur.KEY_LEFT or ch == cur.KEY_RIGHT or ch == cur.KEY_DOWN or chr(ch).isdigit():
             _nod = nods[si] 
             if ch == cur.KEY_DOWN and needs_nod and not nod_set:
                for ii in range(bmark, si + 1):
@@ -1212,6 +1218,11 @@ def show_article(art, show_nod=""):
                 if tmp_nod != 'NULL':
                     _nod = tmp_nod
                     nod_set = True
+            elif chr(ch).isdigit():
+                ni = int(chr(ch))
+                _nod = sel_nod(0, 0, ni, si, no_win = True)
+                nod_set = True
+                ch = cur.KEY_LEFT
 
             if ch == cur.KEY_LEFT or ch == cur.KEY_RIGHT:  
                 for ii in range(bmark, si + 1):
@@ -1244,7 +1255,7 @@ def show_article(art, show_nod=""):
                     can_inc = True
                     nod_set = True
             if si  < total_sents - 1 and can_inc:
-                if ch == cur.KEY_DOWN: # or ch == cur.KEY_RIGHT or nod_set:
+                if ch == cur.KEY_DOWN or ch == cur.KEY_RIGHT: # or nod_set:
                     tmp_si = si
                     si += 1
                     while si < total_sents and (not visible[si] or passable[si] or nods[si]=="next"):
@@ -1253,7 +1264,7 @@ def show_article(art, show_nod=""):
                         si = tmp_si
                         mbeep()
                     
-                if ch == cur.KEY_DOWN and nod_set:
+                if (ch == cur.KEY_DOWN or ch == cur.KEY_RIGHT) and nod_set:
                     bmark = si
                     while bmark >=0 and nods[bmark - 1] == "next":
                         bmark -= 1
@@ -1267,7 +1278,7 @@ def show_article(art, show_nod=""):
                 nod_set = True
                 nods[si] = "okay?"
                 mbeep()
-                show_info("Please use the <Left> or <Right> arrow keys to nod the sentence, and <Down> to skip.", MSG_COLOR)
+                show_info("Please use the <Left> or <Right> arrow keys to nod the sentence, and <Down> to skip.")
                 if si > total_sents - 1:
                     si = total_sents - 1
 
