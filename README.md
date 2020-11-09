@@ -1,3 +1,10 @@
+## Redirect
+
+This project is maintained under a newname, nodcast!
+please check:
+
+https://github.com/puraminy/nodcast
+
 ## What is NodReader
 
 Using Nodreader you can search, study and manage scientific papers or any other article.
